@@ -58,7 +58,7 @@ impl GDeviceModel for G213Model {
     }
 
     fn get_sectors(&self) -> u8 {
-        4
+        5
     }
 
     fn get_default_color(&self) -> RgbColor {

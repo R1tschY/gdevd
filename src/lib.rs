@@ -58,6 +58,12 @@ impl RgbColor {
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Speed(u16);
 
+impl From<u16> for Speed {
+    fn from(input: u16) -> Self {
+        Speed(input)
+    }
+}
+
 /// command to send to device to change color
 #[derive(Copy, Clone, Debug)]
 pub enum Command {
@@ -96,20 +102,6 @@ quick_error! {
         }
     }
 }
-
-// quick_error! {
-//     #[derive(Debug)]
-//     pub enum ServiceError {
-//         Usb(err: rusb::Error) {
-//             from()
-//             display("USB error: {}", err)
-//             cause(err)
-//         }
-//         InvalidConfig(arg: &'static str, msg: String) {
-//             display("Invalid argument {}: {}", arg, msg)
-//         }
-//     }
-// }
 
 impl PartialEq for Box<dyn GDeviceModel> {
     fn eq(&self, other: &Self) -> bool {

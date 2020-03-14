@@ -1,6 +1,7 @@
-use crate::{Command, GDeviceModel, RgbColor};
+use crate::{Command, GDeviceModel, RgbColor, Speed};
 use ini::ini::{ParseError, Properties};
 use ini::Ini;
+use std::convert::TryFrom;
 
 const CONFIG_PATH: &str = "/etc/g213d.conf";
 
@@ -29,39 +30,70 @@ impl Config {
 
     fn parse_model_config(&self, props: &Properties, model: &dyn GDeviceModel) -> Vec<Command> {
         let model_name = model.get_name();
-        let default_color = model.get_default_color();
 
         match props.get("type") {
-            Some("static") => (0..=model.get_sectors())
+            Some("static") => (0..model.get_sectors())
                 .map(|i| {
-                    self.parse_color_prop(props, model_name, &format!("color-{}", i))
-                        .map(|rgb| Command::ColorSector(rgb, Some(i)))
-                        .unwrap_or_else(|| Command::ColorSector(default_color, Some(i)))
+                    Command::ColorSector(
+                        self.parse_color_prop(props, model, &format!("color-{}", i)),
+                        Some(i),
+                    )
                 })
                 .collect(),
-            Some("static-all") => self
-                .parse_color_prop(props, model_name, "color-0")
-                .map(|rgb| Command::ColorSector(rgb, None))
-                .into_iter()
-                .collect(),
-            _ => unimplemented!(),
+            Some("static-all") => vec![Command::ColorSector(
+                self.parse_color_prop(props, model, "color-0"),
+                None,
+            )],
+            Some("breath") => vec![Command::Breathe(
+                self.parse_color_prop(props, model, "color"),
+                self.parse_speed(props, model, "speed"),
+            )],
+            Some("cycle") => vec![Command::Cycle(self.parse_speed(props, model, "speed"))],
+            Some(unknown) => {
+                warn!("Unknown color mode `{}` for {}", unknown, model_name);
+                vec![]
+            }
+            None => vec![],
         }
     }
 
-    fn parse_color_prop(&self, props: &Properties, model: &str, key: &str) -> Option<RgbColor> {
+    fn parse_color_prop(
+        &self,
+        props: &Properties,
+        model: &dyn GDeviceModel,
+        key: &str,
+    ) -> RgbColor {
         if let Some(color) = props.get(key) {
             if let Ok(rgb) = RgbColor::from_hex(color) {
-                Some(rgb)
+                return rgb;
             } else {
                 warn!(
                     "Invalid RGB hex color {} for {}.{} ignored",
-                    color, model, key
+                    color,
+                    model.get_name(),
+                    key
                 );
-                None
             }
-        } else {
-            None
         }
+
+        model.get_default_color()
+    }
+
+    fn parse_speed(&self, props: &Properties, model: &dyn GDeviceModel, key: &str) -> Speed {
+        if let Some(speed) = props.get(key) {
+            if let Ok(speed) = speed.parse::<u16>() {
+                return Speed(speed);
+            } else {
+                warn!(
+                    "Invalid speed {} for {}.{} ignored",
+                    speed,
+                    model.get_name(),
+                    key
+                );
+            }
+        }
+
+        Speed(65535 / 2)
     }
 
     pub fn save_command(&mut self, model: &dyn GDeviceModel, cmd: &Command) {
@@ -75,11 +107,21 @@ impl Config {
             }
             Command::ColorSector(color, None) => {
                 let mut setter = section.set("type", "static-all");
-                for i in 0..=model.get_sectors() {
+                for i in 0..model.get_sectors() {
                     setter = setter.set(format!("color-{}", i), color.to_hex());
                 }
             }
-            _ => unimplemented!(),
+            Command::Breathe(color, speed) => {
+                section
+                    .set("type", "breathe")
+                    .set("color", color.to_hex())
+                    .set("speed", speed.0.to_string());
+            }
+            Command::Cycle(speed) => {
+                section
+                    .set("type", "cycle")
+                    .set("speed", speed.0.to_string());
+            }
         }
         self.0.write_to_file(CONFIG_PATH).unwrap_or_else(|err| {
             error!("Failed to write config file {}: {:?}", CONFIG_PATH, err);

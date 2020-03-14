@@ -10,8 +10,8 @@ use dbus::blocking::LocalConnection;
 use dbus::tree;
 use dbus::tree::{Factory, Interface, MTFn, MethodErr};
 
-use g213d::Command::ColorSector;
-use g213d::{GDevice, GDeviceManager, RgbColor};
+use g213d::Command::{Breathe, ColorSector, Cycle};
+use g213d::{GDevice, GDeviceManager, RgbColor, Speed};
 use std::cell::RefCell;
 
 #[derive(Copy, Clone, Default, Debug)]
@@ -57,6 +57,33 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
                 Ok(vec![m.msg.method_return()])
             })
             .inarg::<&str, _>("color"),
+        )
+        .add_m(
+            f.method("breathe", (), move |m| {
+                let mut manager = m.path.get_data().borrow_mut();
+                let (color, speed): (&str, u16) = m.msg.read2()?;
+                let rgb =
+                    RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
+
+                info!("Set breathe mode with {} and {}", color, speed);
+                manager.send_command(&Breathe(rgb, speed.into()));
+
+                Ok(vec![m.msg.method_return()])
+            })
+            .inarg::<&str, _>("color")
+            .inarg::<u16, _>("speed"),
+        )
+        .add_m(
+            f.method("cycle", (), move |m| {
+                let mut manager = m.path.get_data().borrow_mut();
+                let speed: u16 = m.msg.read1()?;
+
+                info!("Set cycle mode with {}", speed);
+                manager.send_command(&Cycle(speed.into()));
+
+                Ok(vec![m.msg.method_return()])
+            })
+            .inarg::<&str, _>("speed"),
         )
 }
 
