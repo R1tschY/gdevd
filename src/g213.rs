@@ -1,3 +1,4 @@
+use crate::usb_ext::DetachedHandle;
 use crate::{Command, GDevice, GDeviceModel, RgbColor, Speed};
 use rusb::{Context, Device, DeviceHandle, DeviceList, Error, Result, UsbContext};
 use std::time::Duration;
@@ -75,8 +76,8 @@ pub struct G213Device {
 }
 
 impl G213Device {
-    fn send_data(&self, data: &str) -> Result<()> {
-        self.handle.write_control(
+    fn send_data<'t, T: UsbContext>(handle: &mut DetachedHandle<'t, T>, data: &str) -> Result<()> {
+        handle.write_control(
             REQUEST_TYPE,
             REQUEST,
             VALUE as u16,
@@ -86,8 +87,7 @@ impl G213Device {
         )?;
 
         let mut data = [0u8; 64];
-        self.handle
-            .read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(0))?;
+        handle.read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(0))?;
 
         Ok(())
     }
@@ -106,44 +106,54 @@ impl GDevice for G213Device {
         unimplemented!()
     }
 
-    fn send_command(&self, cmd: &Command) -> Result<()> {
+    fn send_command(&mut self, cmd: &Command) -> Result<()> {
         use Command::*;
 
+        let mut handle = DetachedHandle::new(&mut self.handle, INDEX)?;
         match cmd {
             ColorSector(rgb, sector) => {
                 if let Some(sector) = sector {
                     if *sector > 4 {
                         return Err(Error::InvalidParam);
                     }
-                    self.send_data(&format!(
-                        "11ff0c3a{:02x}01{:06x}0200000000000000000000",
-                        sector + 1,
-                        rgb.to_int()
-                    ))
+                    Self::send_data(
+                        &mut handle,
+                        &format!(
+                            "11ff0c3a{:02x}01{:06x}0200000000000000000000",
+                            sector + 1,
+                            rgb.to_int()
+                        ),
+                    )
                 } else {
-                    self.send_data(&format!(
-                        "11ff0c3a{:02x}01{:06x}0200000000000000000000",
-                        0,
-                        rgb.to_int()
-                    ))
+                    Self::send_data(
+                        &mut handle,
+                        &format!(
+                            "11ff0c3a{:02x}01{:06x}0200000000000000000000",
+                            0,
+                            rgb.to_int()
+                        ),
+                    )
                 }
             }
             Breathe(rgb, speed) => {
                 check_speed(*speed)?;
 
-                self.send_data(&format!(
-                    "11ff0c3a0002{:06x}{:04x}006400000000000000",
-                    rgb.to_int(),
-                    speed.0
-                ))
+                Self::send_data(
+                    &mut handle,
+                    &format!(
+                        "11ff0c3a0002{:06x}{:04x}006400000000000000",
+                        rgb.to_int(),
+                        speed.0
+                    ),
+                )
             }
             Cycle(speed) => {
                 check_speed(*speed)?;
 
-                self.send_data(&format!(
-                    "11ff0c3a0003ffffff0000{:04x}64000000000000",
-                    speed.0
-                ))
+                Self::send_data(
+                    &mut handle,
+                    &format!("11ff0c3a0003ffffff0000{:04x}64000000000000", speed.0),
+                )
             }
         }
     }

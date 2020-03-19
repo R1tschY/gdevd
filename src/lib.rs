@@ -21,6 +21,7 @@ use structopt::StructOpt;
 
 pub mod config;
 pub mod g213;
+pub mod usb_ext;
 
 /// RGB color
 #[derive(Copy, Clone, Debug)]
@@ -86,7 +87,7 @@ pub trait GDeviceModel {
 /// a device
 pub trait GDevice {
     fn get_debug_info(&self) -> String;
-    fn send_command(&self, cmd: &Command) -> Result<()>;
+    fn send_command(&mut self, cmd: &Command) -> Result<()>;
 }
 
 quick_error! {
@@ -147,9 +148,9 @@ impl GDeviceManager {
             config,
         };
 
-        for (model, devices) in &self_.devices {
+        for (model, devices) in &mut self_.devices {
             for command in self_.config.commands_for(model.deref()) {
-                for device in devices {
+                for device in devices.iter_mut() {
                     if let Err(err) = device.send_command(&command) {
                         error!("Sending command failed for device: {:?}", err);
                     }
@@ -161,8 +162,8 @@ impl GDeviceManager {
     }
 
     pub fn send_command(&mut self, cmd: &Command) {
-        for (model, devices) in &self.devices {
-            for device in devices {
+        for (model, devices) in &mut self.devices {
+            for device in devices.iter_mut() {
                 if let Err(err) = device.send_command(cmd) {
                     error!("Sending command failed for device: {:?}", err);
                 }
