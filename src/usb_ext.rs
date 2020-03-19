@@ -34,7 +34,9 @@ impl<'t, T: UsbContext> Deref for DetachedHandle<'t, T> {
 impl<'t, T: UsbContext> Drop for DetachedHandle<'t, T> {
     fn drop(&mut self) {
         if self.was_attached {
-            self.handle.attach_kernel_driver(self.index);
+            if let Err(err) = self.handle.attach_kernel_driver(self.index) {
+                warn!("Error while attaching kernel driver: {:?}", err)
+            }
         }
     }
 }

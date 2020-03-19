@@ -1,30 +1,23 @@
-use rusb::{Context, DeviceHandle as UsbDeviceHandle, DeviceList, Result, UsbContext};
-use std::mem::MaybeUninit;
-use std::{fmt, io, slice};
+use rusb::{Context, DeviceList, Result, UsbContext};
+use std::fmt;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate quick_error;
 
-use crate::Command::{Breathe, ColorSector, Cycle};
-
 use crate::config::Config;
 use crate::g213::G213Model;
 use hex::FromHexError;
-use ini::Ini;
 use std::collections::HashMap;
-use std::fmt::Pointer;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::time::Duration;
-use structopt::StructOpt;
 
 pub mod config;
 pub mod g213;
 pub mod usb_ext;
 
 /// RGB color
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct RgbColor(pub u8, pub u8, pub u8);
 
 impl RgbColor {
@@ -66,7 +59,7 @@ impl From<u16> for Speed {
 }
 
 /// command to send to device to change color
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
     ColorSector(RgbColor, Option<u8>),
     Breathe(RgbColor, Speed),
@@ -87,7 +80,7 @@ pub trait GDeviceModel {
 /// a device
 pub trait GDevice {
     fn get_debug_info(&self) -> String;
-    fn send_command(&mut self, cmd: &Command) -> Result<()>;
+    fn send_command(&mut self, cmd: Command) -> Result<()>;
 }
 
 quick_error! {
@@ -119,7 +112,7 @@ impl Hash for Box<dyn GDeviceModel> {
 }
 
 pub struct GDeviceManager {
-    context: Context,
+    _context: Context,
     config: Config,
     devices: HashMap<Box<dyn GDeviceModel>, Vec<Box<dyn GDevice>>>,
 }
@@ -143,7 +136,7 @@ impl GDeviceManager {
         let config = Config::load();
 
         let mut self_ = Self {
-            context,
+            _context: context,
             devices,
             config,
         };
@@ -151,7 +144,7 @@ impl GDeviceManager {
         for (model, devices) in &mut self_.devices {
             for command in self_.config.commands_for(model.deref()) {
                 for device in devices.iter_mut() {
-                    if let Err(err) = device.send_command(&command) {
+                    if let Err(err) = device.send_command(command.clone()) {
                         error!("Sending command failed for device: {:?}", err);
                     }
                 }
@@ -161,15 +154,15 @@ impl GDeviceManager {
         Ok(self_)
     }
 
-    pub fn send_command(&mut self, cmd: &Command) {
+    pub fn send_command(&mut self, cmd: Command) {
         for (model, devices) in &mut self.devices {
             for device in devices.iter_mut() {
-                if let Err(err) = device.send_command(cmd) {
+                if let Err(err) = device.send_command(cmd.clone()) {
                     error!("Sending command failed for device: {:?}", err);
                 }
             }
 
-            self.config.save_command(model.deref(), cmd)
+            self.config.save_command(model.deref(), cmd.clone())
         }
     }
 }

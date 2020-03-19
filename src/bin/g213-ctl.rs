@@ -1,13 +1,7 @@
-use std::mem::MaybeUninit;
-use std::time::Duration;
-use std::{io, slice};
-
 use structopt::StructOpt;
 
-use g213d::g213::G213Model;
-use g213d::Command::{Breathe, ColorSector, Cycle};
+use g213d::Command::ColorSector;
 use g213d::{GDeviceManager, RgbColor};
-use rusb::Result;
 use std::error::Error;
 
 #[derive(StructOpt)]
@@ -45,7 +39,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                 panic!("invalid hex color");
             }
 
-            manager.send_command(&ColorSector(
+            manager.send_command(ColorSector(
                 RgbColor(
                     *rgb.get(0).unwrap(),
                     *rgb.get(1).unwrap(),

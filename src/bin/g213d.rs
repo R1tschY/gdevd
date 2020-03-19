@@ -11,7 +11,7 @@ use dbus::tree;
 use dbus::tree::{Factory, Interface, MTFn, MethodErr};
 
 use g213d::Command::{Breathe, ColorSector, Cycle};
-use g213d::{GDevice, GDeviceManager, RgbColor, Speed};
+use g213d::{GDeviceManager, RgbColor};
 use std::cell::RefCell;
 
 #[derive(Copy, Clone, Default, Debug)]
@@ -37,7 +37,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
 
                 info!("Color sector {} with {}", sector, color);
-                manager.send_command(&ColorSector(rgb, Some(sector)));
+                manager.send_command(ColorSector(rgb, Some(sector)));
 
                 Ok(vec![m.msg.method_return()])
             })
@@ -52,7 +52,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
 
                 info!("Color sectors with {}", color);
-                manager.send_command(&ColorSector(rgb, None));
+                manager.send_command(ColorSector(rgb, None));
 
                 Ok(vec![m.msg.method_return()])
             })
@@ -66,7 +66,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
 
                 info!("Set breathe mode with {} and {}", color, speed);
-                manager.send_command(&Breathe(rgb, speed.into()));
+                manager.send_command(Breathe(rgb, speed.into()));
 
                 Ok(vec![m.msg.method_return()])
             })
@@ -79,7 +79,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
                 let speed: u16 = m.msg.read1()?;
 
                 info!("Set cycle mode with {}", speed);
-                manager.send_command(&Cycle(speed.into()));
+                manager.send_command(Cycle(speed.into()));
 
                 Ok(vec![m.msg.method_return()])
             })

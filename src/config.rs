@@ -1,7 +1,6 @@
 use crate::{Command, GDeviceModel, RgbColor, Speed};
-use ini::ini::{ParseError, Properties};
+use ini::ini::Properties;
 use ini::Ini;
-use std::convert::TryFrom;
 
 const CONFIG_PATH: &str = "/etc/g213d.conf";
 
@@ -25,7 +24,7 @@ impl Config {
         self.0
             .section(Some(model_name))
             .map(|props| self.parse_model_config(props, model))
-            .unwrap_or(vec![])
+            .unwrap_or_else(|| vec![])
     }
 
     fn parse_model_config(&self, props: &Properties, model: &dyn GDeviceModel) -> Vec<Command> {
@@ -96,7 +95,7 @@ impl Config {
         Speed(65535 / 2)
     }
 
-    pub fn save_command(&mut self, model: &dyn GDeviceModel, cmd: &Command) {
+    pub fn save_command(&mut self, model: &dyn GDeviceModel, cmd: Command) {
         let mut section = self.0.with_section(Some(model.get_name()));
 
         match cmd {

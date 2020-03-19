@@ -4,7 +4,7 @@ use rusb::{Context, Device, DeviceHandle, DeviceList, Error, Result, UsbContext}
 use std::time::Duration;
 
 // Standard color, i found this color to produce a white color on my G213
-const STANDARD_COLOR_HEX: &str = "ffb4aa";
+//const STANDARD_COLOR_HEX: &str = "ffb4aa";
 // The id of the Logitech company
 const ID_VENDOR: u16 = 0x046d;
 // The id of the G213
@@ -28,11 +28,17 @@ impl G213Model {
     }
 }
 
+impl Default for G213Model {
+    fn default() -> Self {
+        Self()
+    }
+}
+
 impl G213Model {
     fn try_open_device(device: &Device<Context>) -> Result<Box<dyn GDevice>> {
-        let mut handle = device.open()?;
-
-        Ok(Box::new(G213Device { handle }))
+        Ok(Box::new(G213Device {
+            handle: device.open()?,
+        }))
     }
 
     fn open_device(device: &Device<Context>) -> Option<Box<dyn GDevice>> {
@@ -94,7 +100,7 @@ impl G213Device {
 }
 
 fn check_speed(speed: Speed) -> Result<()> {
-    if speed.0 < 32 || speed.0 > 65535 {
+    if speed.0 < 32 {
         Err(Error::InvalidParam)
     } else {
         Ok(())
@@ -106,14 +112,14 @@ impl GDevice for G213Device {
         unimplemented!()
     }
 
-    fn send_command(&mut self, cmd: &Command) -> Result<()> {
+    fn send_command(&mut self, cmd: Command) -> Result<()> {
         use Command::*;
 
         let mut handle = DetachedHandle::new(&mut self.handle, INDEX)?;
         match cmd {
             ColorSector(rgb, sector) => {
                 if let Some(sector) = sector {
-                    if *sector > 4 {
+                    if sector > 4 {
                         return Err(Error::InvalidParam);
                     }
                     Self::send_data(
@@ -136,7 +142,7 @@ impl GDevice for G213Device {
                 }
             }
             Breathe(rgb, speed) => {
-                check_speed(*speed)?;
+                check_speed(speed)?;
 
                 Self::send_data(
                     &mut handle,
@@ -148,7 +154,7 @@ impl GDevice for G213Device {
                 )
             }
             Cycle(speed) => {
-                check_speed(*speed)?;
+                check_speed(speed)?;
 
                 Self::send_data(
                     &mut handle,
