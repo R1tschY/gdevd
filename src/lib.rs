@@ -1,4 +1,4 @@
-use rusb::{Context, DeviceList, Result, UsbContext};
+use rusb::{Context, DeviceList, UsbContext};
 use std::fmt;
 #[macro_use]
 extern crate log;
@@ -8,6 +8,7 @@ extern crate quick_error;
 use crate::config::Config;
 use crate::g213::G213Model;
 use hex::FromHexError;
+use quick_error::ResultExt;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -80,22 +81,25 @@ pub trait GDeviceModel {
 /// a device
 pub trait GDevice {
     fn get_debug_info(&self) -> String;
-    fn send_command(&mut self, cmd: Command) -> Result<()>;
+    fn send_command(&mut self, cmd: Command) -> CommandResult<()>;
 }
 
 quick_error! {
     #[derive(Debug)]
     pub enum CommandError {
-        Usb(err: rusb::Error) {
-            from()
-            display("USB error: {}", err)
+        Usb(context: String, err: rusb::Error) {
+            display("USB error: {}: {}", context, err)
             cause(err)
+            context(message: &'a str, err: rusb::Error)
+                -> (message.to_string(), err)
         }
         InvalidArgument(arg: &'static str, msg: String) {
             display("Invalid argument {}: {}", arg, msg)
         }
     }
 }
+
+type CommandResult<T> = Result<T, CommandError>;
 
 impl PartialEq for Box<dyn GDeviceModel> {
     fn eq(&self, other: &Self) -> bool {
@@ -122,9 +126,9 @@ impl GDeviceManager {
         vec![Box::new(G213Model::new())]
     }
 
-    pub fn try_new() -> Result<Self> {
-        let context = Context::new()?;
-        let usb_devices = context.devices()?;
+    pub fn try_new() -> CommandResult<Self> {
+        let context = Context::new().context("creating USB context")?;
+        let usb_devices = context.devices().context("listing USB devices")?;
         let models_list = Self::get_models();
         let devices = models_list
             .into_iter()

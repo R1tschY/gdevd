@@ -1,6 +1,8 @@
 use crate::usb_ext::DetachedHandle;
-use crate::{Command, GDevice, GDeviceModel, RgbColor, Speed};
-use rusb::{Context, Device, DeviceHandle, DeviceList, Error, Result, UsbContext};
+use crate::{Command, CommandError, CommandResult, GDevice, GDeviceModel, RgbColor, Speed};
+use quick_error::ResultExt;
+use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
+use std::thread::sleep;
 use std::time::Duration;
 
 // Standard color, i found this color to produce a white color on my G213
@@ -20,24 +22,24 @@ const VALUE: i32 = 0x0211;
 // --'
 const INDEX: u8 = 0x0001;
 
-pub struct G213Model();
+pub struct G213Model;
 
 impl G213Model {
     pub fn new() -> Self {
-        Self()
+        Self
     }
 }
 
 impl Default for G213Model {
     fn default() -> Self {
-        Self()
+        Self
     }
 }
 
 impl G213Model {
-    fn try_open_device(device: &Device<Context>) -> Result<Box<dyn GDevice>> {
+    fn try_open_device(device: &Device<Context>) -> CommandResult<Box<dyn GDevice>> {
         Ok(Box::new(G213Device {
-            handle: device.open()?,
+            handle: device.open().context("opening G213 USB device")?,
         }))
     }
 
@@ -81,27 +83,59 @@ pub struct G213Device {
     handle: DeviceHandle<Context>,
 }
 
-impl G213Device {
-    fn send_data<'t, T: UsbContext>(handle: &mut DetachedHandle<'t, T>, data: &str) -> Result<()> {
-        handle.write_control(
-            REQUEST_TYPE,
-            REQUEST,
-            VALUE as u16,
-            INDEX as u16,
-            &hex::decode(data).unwrap(),
-            Duration::from_secs(0),
-        )?;
+pub fn retry_when_busy<T: Default>(
+    times: usize,
+    sleep_time: Duration,
+    f: impl Fn() -> rusb::Result<T>,
+) -> rusb::Result<T> {
+    let mut result: rusb::Result<T> = Ok(T::default());
+    for _ in 0..times {
+        result = f();
 
-        let mut data = [0u8; 64];
-        handle.read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(0))?;
+        match result {
+            Err(rusb::Error::Busy) => {
+                sleep(sleep_time);
+                continue;
+            }
+            _ => break,
+        }
+    }
+    result
+}
+
+impl G213Device {
+    fn send_data<'t, T: UsbContext>(
+        handle: &mut DetachedHandle<'t, T>,
+        data: &str,
+    ) -> CommandResult<()> {
+        retry_when_busy(10, Duration::from_millis(300), || {
+            handle.write_control(
+                REQUEST_TYPE,
+                REQUEST,
+                VALUE as u16,
+                INDEX as u16,
+                &hex::decode(data).unwrap(),
+                Duration::from_secs(0),
+            )
+        })
+        .context("write_control")?;
+
+        retry_when_busy(10, Duration::from_millis(300), || {
+            let mut data = [0u8; 64];
+            handle.read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(0))
+        })
+        .context("read_interrupt")?;
 
         Ok(())
     }
 }
 
-fn check_speed(speed: Speed) -> Result<()> {
+fn check_speed(speed: Speed) -> CommandResult<()> {
     if speed.0 < 32 {
-        Err(Error::InvalidParam)
+        Err(CommandError::InvalidArgument(
+            "speed",
+            format!("{} < 32", speed.0),
+        ))
     } else {
         Ok(())
     }
@@ -112,15 +146,19 @@ impl GDevice for G213Device {
         unimplemented!()
     }
 
-    fn send_command(&mut self, cmd: Command) -> Result<()> {
+    fn send_command(&mut self, cmd: Command) -> CommandResult<()> {
         use Command::*;
 
-        let mut handle = DetachedHandle::new(&mut self.handle, INDEX)?;
+        let mut handle = DetachedHandle::new(&mut self.handle, INDEX)
+            .context("detaching USB device from kernel")?;
         match cmd {
             ColorSector(rgb, sector) => {
                 if let Some(sector) = sector {
                     if sector > 4 {
-                        return Err(Error::InvalidParam);
+                        return Err(CommandError::InvalidArgument(
+                            "sector",
+                            format!("{} > 4", sector),
+                        ));
                     }
                     Self::send_data(
                         &mut handle,
