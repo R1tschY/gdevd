@@ -78,11 +78,15 @@ pub trait GDeviceModel {
     fn get_name(&self) -> &'static str;
 }
 
+pub type GDeviceModelRef = Box<dyn GDeviceModel>;
+
 /// a device
 pub trait GDevice {
     fn get_debug_info(&self) -> String;
     fn send_command(&mut self, cmd: Command) -> CommandResult<()>;
 }
+
+pub type GDeviceRef = Box<dyn GDevice>;
 
 quick_error! {
     #[derive(Debug)]
@@ -118,7 +122,7 @@ impl Hash for Box<dyn GDeviceModel> {
 pub struct GDeviceManager {
     _context: Context,
     config: Config,
-    devices: HashMap<Box<dyn GDeviceModel>, Vec<Box<dyn GDevice>>>,
+    devices: HashMap<GDeviceModelRef, Vec<GDeviceRef>>,
 }
 
 impl GDeviceManager {
@@ -126,17 +130,11 @@ impl GDeviceManager {
         vec![Box::new(G213Model::new())]
     }
 
+    /// Try to create device manager with USB connection
     pub fn try_new() -> CommandResult<Self> {
         let context = Context::new().context("creating USB context")?;
         let usb_devices = context.devices().context("listing USB devices")?;
-        let models_list = Self::get_models();
-        let devices = models_list
-            .into_iter()
-            .map(|model| {
-                let devices = model.find(&usb_devices);
-                (model, devices)
-            })
-            .collect::<HashMap<Box<dyn GDeviceModel>, Vec<Box<dyn GDevice>>>>();
+        let devices = Self::find_devices(&usb_devices);
         let config = Config::load();
 
         let mut self_ = Self {
@@ -144,20 +142,23 @@ impl GDeviceManager {
             devices,
             config,
         };
-
-        for (model, devices) in &mut self_.devices {
-            for command in self_.config.commands_for(model.deref()) {
-                for device in devices.iter_mut() {
-                    if let Err(err) = device.send_command(command.clone()) {
-                        error!("Sending command failed for device: {:?}", err);
-                    }
-                }
-            }
-        }
-
+        self_.send();
         Ok(self_)
     }
 
+    fn find_devices(
+        usb_devices: &DeviceList<Context>,
+    ) -> HashMap<GDeviceModelRef, Vec<GDeviceRef>> {
+        Self::get_models()
+            .into_iter()
+            .map(|model| {
+                let devices = model.find(&usb_devices);
+                (model, devices)
+            })
+            .collect()
+    }
+
+    /// Send command to all devices
     pub fn send_command(&mut self, cmd: Command) {
         for (model, devices) in &mut self.devices {
             for device in devices.iter_mut() {
@@ -168,6 +169,25 @@ impl GDeviceManager {
 
             self.config.save_command(model.deref(), cmd.clone())
         }
+    }
+
+    /// Send current config to device
+    pub fn send(&mut self) {
+        for (model, devices) in &mut self.devices {
+            for command in self.config.commands_for(model.deref()) {
+                for device in devices.iter_mut() {
+                    if let Err(err) = device.send_command(command.clone()) {
+                        error!("Sending command failed for device: {:?}", err);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Refresh config from filesystem and send config
+    pub fn refresh(&mut self) {
+        self.config = Config::load();
+        self.send();
     }
 }
 

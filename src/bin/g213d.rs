@@ -85,6 +85,14 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
             })
             .inarg::<&str, _>("speed"),
         )
+        .add_m(f.method("refresh", (), move |m| {
+            let mut manager = m.path.get_data().borrow_mut();
+
+            info!("Refresh");
+            manager.refresh();
+
+            Ok(vec![m.msg.method_return()])
+        }))
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

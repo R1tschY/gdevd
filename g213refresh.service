@@ -1,17 +1,15 @@
 [Unit]
-Description=G213 Daemon
+Description=G213 Refresh
+Requires=g213d.service
 After=suspend.target
 After=hibernate.target
 After=hybrid-sleep.target
 
 [Service]
-Type=dbus
-BusName=de.richardliebscher.g213d
-Environment="RUST_LOG=INFO"
-ExecStart=/usr/local/bin/g213d
+Type=oneshot
+ExecStart=/usr/local/bin/g213ctl refresh
 
 [Install]
-WantedBy=multi-user.target
 WantedBy=suspend.target
 WantedBy=hibernate.target
 WantedBy=hybrid-sleep.target

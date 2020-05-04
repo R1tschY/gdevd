@@ -1,8 +1,8 @@
 use structopt::StructOpt;
 
-use g213d::Command::ColorSector;
-use g213d::{GDeviceManager, RgbColor};
+use dbus::blocking::Connection;
 use std::error::Error;
+use std::time::Duration;
 
 #[derive(StructOpt)]
 #[structopt(
@@ -17,38 +17,38 @@ enum Cli {
         /// sector index
         sector: u8,
     },
-    Breathe {
+    /*    Breathe {
         color: String,
         speed: u16,
     },
     Cycle {
         speed: u16,
-    },
+    },*/
+    Refresh,
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
     simple_logger::init()?;
 
-    let args = Cli::from_args();
+    // DBus
+    let conn = Connection::new_system()?;
+    let devices = conn.with_proxy(
+        "de.richardliebscher.g213d",
+        "/devices",
+        Duration::from_millis(5000),
+    );
 
-    let mut manager = GDeviceManager::try_new()?;
-    match args {
+    match Cli::from_args() {
         Cli::Color { color, sector } => {
-            let rgb = hex::decode(color).expect("invalid hex color");
-            if rgb.len() != 3 {
-                panic!("invalid hex color");
-            }
-
-            manager.send_command(ColorSector(
-                RgbColor(
-                    *rgb.get(0).unwrap(),
-                    *rgb.get(1).unwrap(),
-                    *rgb.get(2).unwrap(),
-                ),
-                Some(sector),
-            ));
+            devices.method_call(
+                "de.richardliebscher.g213d.GDeviceManager",
+                "color_sector",
+                (&color as &str, sector),
+            )?;
         }
-        _ => unimplemented!(),
+        Cli::Refresh => {
+            devices.method_call("de.richardliebscher.g213d.GDeviceManager", "refresh", ())?;
+        }
     }
 
     Ok(())
