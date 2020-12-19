@@ -10,6 +10,7 @@ use crate::g213::G213Model;
 use hex::FromHexError;
 use quick_error::ResultExt;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
@@ -49,6 +50,28 @@ impl RgbColor {
     }
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum Direction {
+    LeftToRight = 1,
+    RightToLeft = 6,
+    CenterToEdge = 3,
+    EdgeToCenter = 8,
+}
+
+impl TryFrom<&str> for Direction {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "left-to-right" => Ok(Direction::LeftToRight),
+            "right-to-left" => Ok(Direction::RightToLeft),
+            "center-to-edge" => Ok(Direction::CenterToEdge),
+            "edge-to-center" => Ok(Direction::EdgeToCenter),
+            _ => Err(()),
+        }
+    }
+}
+
 /// speed of effect
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Speed(u16);
@@ -65,6 +88,7 @@ pub enum Command {
     ColorSector(RgbColor, Option<u8>),
     Breathe(RgbColor, Speed),
     Cycle(Speed),
+    Wave(Direction, Speed),
 }
 
 /// model series

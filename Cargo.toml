@@ -16,6 +16,6 @@ hex = "^0.4.2"
 structopt = "^0.2.10"
 dbus = "^0.8.2"
 log = "^0.4.8"
-simple_logger = { version="^1.6.0", default_features=false }
+simple_logger = { version = "^1.6.0", default_features = false }
 rust-ini = "^0.15"
 quick-error = "^1.2.3"

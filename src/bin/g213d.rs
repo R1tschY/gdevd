@@ -10,9 +10,10 @@ use dbus::blocking::LocalConnection;
 use dbus::tree;
 use dbus::tree::{Factory, Interface, MTFn, MethodErr};
 
-use g213d::Command::{Breathe, ColorSector, Cycle};
+use g213d::Command::{Breathe, ColorSector, Cycle, Wave};
 use g213d::{GDeviceManager, RgbColor};
 use std::cell::RefCell;
+use std::convert::TryInto;
 
 #[derive(Copy, Clone, Default, Debug)]
 struct TreeData;
@@ -83,7 +84,25 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
 
                 Ok(vec![m.msg.method_return()])
             })
-            .inarg::<&str, _>("speed"),
+            .inarg::<u16, _>("speed"),
+        )
+        .add_m(
+            f.method("wave", (), move |m| {
+                let mut manager = m.path.get_data().borrow_mut();
+                let (direction, speed): (&str, u16) = m.msg.read2()?;
+
+                info!("Set wave with {} in {:?}", speed, direction);
+                manager.send_command(Wave(
+                    direction
+                        .try_into()
+                        .map_err(|_err| MethodErr::invalid_arg("direction"))?,
+                    speed.into(),
+                ));
+
+                Ok(vec![m.msg.method_return()])
+            })
+            .inarg::<&str, _>("direction")
+            .inarg::<u16, _>("speed"),
         )
         .add_m(f.method("refresh", (), move |m| {
             let mut manager = m.path.get_data().borrow_mut();

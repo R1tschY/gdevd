@@ -1,6 +1,7 @@
-use crate::{Command, GDeviceModel, RgbColor, Speed};
+use crate::{Command, Direction, GDeviceModel, RgbColor, Speed};
 use ini::ini::Properties;
 use ini::Ini;
+use std::convert::TryInto;
 
 const CONFIG_PATH: &str = "/etc/g213d.conf";
 
@@ -48,6 +49,10 @@ impl Config {
                 self.parse_speed(props, model, "speed"),
             )],
             Some("cycle") => vec![Command::Cycle(self.parse_speed(props, model, "speed"))],
+            Some("wave") => vec![Command::Wave(
+                self.parse_direction(props, model, "direction"),
+                self.parse_speed(props, model, "speed"),
+            )],
             Some(unknown) => {
                 warn!("Unknown color mode `{}` for {}", unknown, model_name);
                 vec![]
@@ -95,6 +100,27 @@ impl Config {
         Speed(65535 / 2)
     }
 
+    fn parse_direction(
+        &self,
+        props: &Properties,
+        model: &dyn GDeviceModel,
+        key: &str,
+    ) -> Direction {
+        if let Some(direction) = props.get(key) {
+            direction.try_into().unwrap_or_else(|_err| {
+                warn!(
+                    "Invalid direction {} for {}.{} ignored",
+                    direction,
+                    model.get_name(),
+                    key
+                );
+                Direction::LeftToRight
+            })
+        } else {
+            Direction::LeftToRight
+        }
+    }
+
     pub fn save_command(&mut self, model: &dyn GDeviceModel, cmd: Command) {
         let mut section = self.0.with_section(Some(model.get_name()));
 
@@ -119,6 +145,20 @@ impl Config {
             Command::Cycle(speed) => {
                 section
                     .set("type", "cycle")
+                    .set("speed", speed.0.to_string());
+            }
+            Command::Wave(direction, speed) => {
+                section
+                    .set("type", "wave")
+                    .set(
+                        "direction",
+                        match direction {
+                            Direction::LeftToRight => "left-to-right",
+                            Direction::RightToLeft => "right-to-left",
+                            Direction::CenterToEdge => "center-to-edge",
+                            Direction::EdgeToCenter => "edge-to-center",
+                        },
+                    )
                     .set("speed", speed.0.to_string());
             }
         }

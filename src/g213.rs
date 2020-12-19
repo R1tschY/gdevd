@@ -1,5 +1,7 @@
 use crate::usb_ext::DetachedHandle;
-use crate::{Command, CommandError, CommandResult, GDevice, GDeviceModel, RgbColor, Speed};
+use crate::{
+    Command, CommandError, CommandResult, Direction, GDevice, GDeviceModel, RgbColor, Speed,
+};
 use quick_error::ResultExt;
 use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
 use std::time::Duration;
@@ -196,6 +198,27 @@ impl UsbCommand {
         ])
     }
 
+    pub fn for_wave(direction: Direction, speed: Speed) -> Self {
+        Self::new(&[
+            0x11,
+            0xff,
+            0x0c,
+            0x3a,
+            0,
+            0x04,
+            0x00,
+            0x00,
+            0x00,
+            0,
+            0,
+            0,
+            (speed.0 >> 0) as u8,
+            direction as u8,
+            0x64,
+            (speed.0 >> 8) as u8,
+        ])
+    }
+
     pub fn new(b: &[u8]) -> Self {
         let mut bytes = [0; 20];
         bytes[0..b.len()].copy_from_slice(b);
@@ -237,6 +260,10 @@ impl GDevice for G213Device {
             Cycle(speed) => {
                 check_speed(speed)?;
                 Self::send_data(&mut handle, &UsbCommand::for_cycle(speed))
+            }
+            Wave(direction, speed) => {
+                check_speed(speed)?;
+                Self::send_data(&mut handle, &UsbCommand::for_wave(direction, speed))
             }
         }
     }
