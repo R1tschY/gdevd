@@ -53,6 +53,9 @@ impl Config {
                 self.parse_direction(props, model, "direction"),
                 self.parse_speed(props, model, "speed"),
             )],
+            Some("startEffect") => vec![Command::StartEffect(
+                self.parse_bool(props, model, "state").unwrap_or(true),
+            )],
             Some(unknown) => {
                 warn!("Unknown color mode `{}` for {}", unknown, model_name);
                 vec![]
@@ -121,6 +124,23 @@ impl Config {
         }
     }
 
+    fn parse_bool(&self, props: &Properties, model: &dyn GDeviceModel, key: &str) -> Option<bool> {
+        if let Some(boolean) = props.get(key) {
+            if let Ok(boolean) = boolean.parse::<bool>() {
+                return Some(boolean);
+            } else {
+                warn!(
+                    "Invalid speed {} for {}.{} ignored",
+                    boolean,
+                    model.get_name(),
+                    key
+                );
+            }
+        }
+
+        None
+    }
+
     pub fn save_command(&mut self, model: &dyn GDeviceModel, cmd: Command) {
         let mut section = self.0.with_section(Some(model.get_name()));
 
@@ -160,6 +180,11 @@ impl Config {
                         },
                     )
                     .set("speed", speed.0.to_string());
+            }
+            Command::StartEffect(state) => {
+                section
+                    .set("type", "startEffect")
+                    .set("state", if state { "true" } else { "false" });
             }
         }
         self.0.write_to_file(CONFIG_PATH).unwrap_or_else(|err| {

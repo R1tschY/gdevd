@@ -89,6 +89,7 @@ pub enum Command {
     Breathe(RgbColor, Speed),
     Cycle(Speed),
     Wave(Direction, Speed),
+    StartEffect(bool),
 }
 
 /// model series

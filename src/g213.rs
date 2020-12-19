@@ -219,6 +219,18 @@ impl UsbCommand {
         ])
     }
 
+    pub fn for_start_effect(state: bool) -> Self {
+        Self::new(&[
+            0x11,
+            0xff,
+            0x0c,
+            0x5d,
+            0x00,
+            0x01,
+            if state { 1 } else { 2 },
+        ])
+    }
+
     pub fn new(b: &[u8]) -> Self {
         let mut bytes = [0; 20];
         bytes[0..b.len()].copy_from_slice(b);
@@ -264,6 +276,9 @@ impl GDevice for G213Device {
             Wave(direction, speed) => {
                 check_speed(speed)?;
                 Self::send_data(&mut handle, &UsbCommand::for_wave(direction, speed))
+            }
+            StartEffect(state) => {
+                Self::send_data(&mut handle, &UsbCommand::for_start_effect(state))
             }
         }
     }
