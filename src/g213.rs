@@ -20,7 +20,7 @@ const REQUEST: u8 = 0x09;
 //    / configuration for the G213
 const VALUE: i32 = 0x0211;
 // --'
-const INDEX: u8 = 0x0001;
+const INTERFACE: u8 = 0x0001;
 
 pub struct G213Model;
 
@@ -83,48 +83,23 @@ pub struct G213Device {
     handle: DeviceHandle<Context>,
 }
 
-pub fn retry_when_busy<T: Default>(
-    times: usize,
-    sleep_time: Duration,
-    f: impl Fn() -> rusb::Result<T>,
-) -> rusb::Result<T> {
-    let mut result: rusb::Result<T> = Ok(T::default());
-    for _ in 0..times {
-        result = f();
-
-        match result {
-            Err(rusb::Error::Busy) => {
-                sleep(sleep_time);
-                continue;
-            }
-            _ => break,
-        }
-    }
-    result
-}
-
 impl G213Device {
-    fn send_data<'t, T: UsbContext>(
-        handle: &mut DetachedHandle<'t, T>,
-        data: &str,
-    ) -> CommandResult<()> {
-        retry_when_busy(10, Duration::from_millis(300), || {
-            handle.write_control(
+    fn send_data<'t, T: UsbContext>(handle: &mut DeviceHandle<T>, data: &str) -> CommandResult<()> {
+        handle
+            .write_control(
                 REQUEST_TYPE,
                 REQUEST,
                 VALUE as u16,
-                INDEX as u16,
+                INTERFACE as u16,
                 &hex::decode(data).unwrap(),
                 Duration::from_secs(0),
             )
-        })
-        .context("write_control")?;
+            .context("write_control")?;
 
-        retry_when_busy(10, Duration::from_millis(300), || {
-            let mut data = [0u8; 64];
-            handle.read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(0))
-        })
-        .context("read_interrupt")?;
+        let mut data = [0u8; 20];
+        handle
+            .read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(60))
+            .context("read_interrupt")?;
 
         Ok(())
     }
@@ -149,7 +124,7 @@ impl GDevice for G213Device {
     fn send_command(&mut self, cmd: Command) -> CommandResult<()> {
         use Command::*;
 
-        let mut handle = DetachedHandle::new(&mut self.handle, INDEX)
+        let mut handle = DetachedHandle::new(&mut self.handle, INTERFACE)
             .context("detaching USB device from kernel")?;
         match cmd {
             ColorSector(rgb, sector) => {

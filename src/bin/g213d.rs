@@ -115,6 +115,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     info!("Starting server");
     loop {
-        c.process(Duration::from_millis(1000))?;
+        c.process(Duration::from_millis(60000))?;
     }
 }
