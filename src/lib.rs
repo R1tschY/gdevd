@@ -22,15 +22,15 @@ pub mod usb_ext;
 pub struct RgbColor(pub u8, pub u8, pub u8);
 
 impl RgbColor {
-    pub fn red_channel(&self) -> u8 {
+    pub fn red(&self) -> u8 {
         self.0
     }
 
-    pub fn green_channel(&self) -> u8 {
+    pub fn green(&self) -> u8 {
         self.1
     }
 
-    pub fn blue_channel(&self) -> u8 {
+    pub fn blue(&self) -> u8 {
         self.2
     }
 

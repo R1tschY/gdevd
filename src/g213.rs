@@ -2,7 +2,6 @@ use crate::usb_ext::DetachedHandle;
 use crate::{Command, CommandError, CommandResult, GDevice, GDeviceModel, RgbColor, Speed};
 use quick_error::ResultExt;
 use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
-use std::thread::sleep;
 use std::time::Duration;
 
 // Standard color, i found this color to produce a white color on my G213
@@ -21,6 +20,10 @@ const REQUEST: u8 = 0x09;
 const VALUE: i32 = 0x0211;
 // --'
 const INTERFACE: u8 = 0x0001;
+
+// const DEFAULT_FREQUENCY: u16 = 1000;
+// const DEFAULT_BRIGHTNESS: u8 = 100;
+const DEFAULT_RGB: RgbColor = RgbColor(0x00, 0xA9, 0xE0);
 
 pub struct G213Model;
 
@@ -71,7 +74,7 @@ impl GDeviceModel for G213Model {
     }
 
     fn get_default_color(&self) -> RgbColor {
-        RgbColor(0xff, 0xb4, 0xaa)
+        DEFAULT_RGB
     }
 
     fn get_name(&self) -> &'static str {
@@ -84,21 +87,24 @@ pub struct G213Device {
 }
 
 impl G213Device {
-    fn send_data<'t, T: UsbContext>(handle: &mut DeviceHandle<T>, data: &str) -> CommandResult<()> {
+    fn send_data<'t, T: UsbContext>(
+        handle: &mut DeviceHandle<T>,
+        data: &UsbCommand,
+    ) -> CommandResult<()> {
         handle
             .write_control(
                 REQUEST_TYPE,
                 REQUEST,
                 VALUE as u16,
                 INTERFACE as u16,
-                &hex::decode(data).unwrap(),
-                Duration::from_secs(0),
+                &data.bytes,
+                Duration::from_secs(5),
             )
             .context("write_control")?;
 
         let mut data = [0u8; 20];
         handle
-            .read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(60))
+            .read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(5))
             .context("read_interrupt")?;
 
         Ok(())
@@ -116,6 +122,87 @@ fn check_speed(speed: Speed) -> CommandResult<()> {
     }
 }
 
+struct UsbCommand {
+    bytes: [u8; 20],
+}
+
+impl UsbCommand {
+    pub fn for_color(color: RgbColor) -> Self {
+        Self::new(&[
+            0x11,
+            0xff,
+            0x0c,
+            0x3a,
+            0,
+            0x01,
+            color.red(),
+            color.green(),
+            color.blue(),
+            0x02,
+        ])
+    }
+
+    pub fn for_region_color(region: u8, color: RgbColor) -> Self {
+        Self::new(&[
+            0x11,
+            0xff,
+            0x0c,
+            0x3a,
+            region + 1,
+            0x01,
+            color.red(),
+            color.green(),
+            color.blue(),
+            0x02,
+        ])
+    }
+
+    pub fn for_reset() -> Self {
+        Self::new(&[0x11, 0xff, 0x0c, 0x0d])
+    }
+
+    pub fn for_breathe(color: RgbColor, speed: Speed) -> Self {
+        Self::new(&[
+            0x11,
+            0xff,
+            0x0c,
+            0x3a,
+            0,
+            0x02,
+            color.red(),
+            color.green(),
+            color.blue(),
+            (speed.0 >> 8) as u8,
+            (speed.0 >> 0) as u8,
+        ])
+    }
+
+    pub fn for_cycle(speed: Speed) -> Self {
+        Self::new(&[
+            0x11,
+            0xff,
+            0x0c,
+            0x3a,
+            0,
+            0x03,
+            0xff,
+            0xff,
+            0xff,
+            0,
+            0,
+            (speed.0 >> 8) as u8,
+            (speed.0 >> 0) as u8,
+            0x64,
+        ])
+    }
+
+    pub fn new(b: &[u8]) -> Self {
+        let mut bytes = [0; 20];
+        bytes[0..b.len()].copy_from_slice(b);
+        Self { bytes }
+    }
+}
+
 impl GDevice for G213Device {
     fn get_debug_info(&self) -> String {
         unimplemented!()
@@ -126,6 +213,9 @@ impl GDevice for G213Device {
 
         let mut handle = DetachedHandle::new(&mut self.handle, INTERFACE)
             .context("detaching USB device from kernel")?;
+
+        Self::send_data(&mut handle, &UsbCommand::for_reset())?;
+
         match cmd {
             ColorSector(rgb, sector) => {
                 if let Some(sector) = sector {
@@ -135,44 +225,18 @@ impl GDevice for G213Device {
                             format!("{} > 4", sector),
                         ));
                     }
-                    Self::send_data(
-                        &mut handle,
-                        &format!(
-                            "11ff0c3a{:02x}01{:06x}0200000000000000000000",
-                            sector + 1,
-                            rgb.to_int()
-                        ),
-                    )
+                    Self::send_data(&mut handle, &UsbCommand::for_region_color(sector, rgb))
                 } else {
-                    Self::send_data(
-                        &mut handle,
-                        &format!(
-                            "11ff0c3a{:02x}01{:06x}0200000000000000000000",
-                            0,
-                            rgb.to_int()
-                        ),
-                    )
+                    Self::send_data(&mut handle, &UsbCommand::for_color(rgb))
                 }
             }
             Breathe(rgb, speed) => {
                 check_speed(speed)?;
-
-                Self::send_data(
-                    &mut handle,
-                    &format!(
-                        "11ff0c3a0002{:06x}{:04x}006400000000000000",
-                        rgb.to_int(),
-                        speed.0
-                    ),
-                )
+                Self::send_data(&mut handle, &UsbCommand::for_breathe(rgb, speed))
             }
             Cycle(speed) => {
                 check_speed(speed)?;
-
-                Self::send_data(
-                    &mut handle,
-                    &format!("11ff0c3a0003ffffff0000{:04x}64000000000000", speed.0),
-                )
+                Self::send_data(&mut handle, &UsbCommand::for_cycle(speed))
             }
         }
     }
