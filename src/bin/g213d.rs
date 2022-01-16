@@ -10,8 +10,8 @@ use dbus::blocking::LocalConnection;
 use dbus::tree;
 use dbus::tree::{Factory, Interface, MTFn, MethodErr};
 
-use g213d::Command::{Breathe, ColorSector, Cycle, Wave};
-use g213d::{GDeviceManager, RgbColor};
+use gdev::Command::{Breathe, ColorSector, Cycle, Wave};
+use gdev::{GDeviceManager, RgbColor};
 use std::cell::RefCell;
 use std::convert::TryInto;
 
@@ -30,6 +30,32 @@ impl tree::DataType for TreeData {
 fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
     let f = Factory::new_fn::<TreeData>();
     f.interface("de.richardliebscher.g213d.GDeviceManager", ())
+        .add_m(
+            f.method("list_drivers", (), move |m| {
+                let mut manager = m.path.get_data().borrow_mut();
+
+                let drivers = manager.list_drivers();
+                let drivers_info: Vec<(&str,)> = drivers
+                    .iter()
+                    .map(|driver| (driver.get_model().get_name(),))
+                    .collect();
+                Ok(vec![m.msg.method_return().append1(drivers_info)])
+            })
+            .outarg::<&[(&str,)], _>("drivers"),
+        )
+        .add_m(
+            f.method("list", (), move |m| {
+                let mut manager = m.path.get_data().borrow_mut();
+
+                let devices = manager.list();
+                let devices_info: Vec<(&str, String)> = devices
+                    .iter()
+                    .map(|device| (device.get_model().get_name(), device.get_debug_info()))
+                    .collect();
+                Ok(vec![m.msg.method_return().append1(devices_info)])
+            })
+            .outarg::<&[(&str, &str)], _>("devices"),
+        )
         .add_m(
             f.method("color_sector", (), move |m| {
                 let mut manager = m.path.get_data().borrow_mut();
@@ -121,7 +147,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     c.request_name("de.richardliebscher.g213d", false, true, true)?;
 
     let device_manager_if = create_interface();
-    let device_manager = GDeviceManager::try_new()?;
+    let mut device_manager = GDeviceManager::try_new()?;
+    device_manager.load_devices();
 
     let f = Factory::new_fn::<TreeData>();
     let tree = f.tree(()).add(

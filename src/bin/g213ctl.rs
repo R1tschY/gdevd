@@ -39,6 +39,10 @@ enum Cli {
     },
     /// Reapply saved effect
     Refresh,
+    /// List drivers
+    ListDrivers,
+    /// List devices
+    List,
 }
 
 fn main() -> std::result::Result<(), Box<dyn Error>> {
@@ -93,6 +97,23 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         }
         Cli::Refresh => {
             devices.method_call("de.richardliebscher.g213d.GDeviceManager", "refresh", ())?;
+        }
+        Cli::ListDrivers => {
+            let drivers: (Vec<(String,)>,) = devices.method_call(
+                "de.richardliebscher.g213d.GDeviceManager",
+                "list_drivers",
+                (),
+            )?;
+            for driver in drivers.0 {
+                println!("{}", driver.0);
+            }
+        }
+        Cli::List => {
+            let devices: (Vec<(String, String)>,) =
+                devices.method_call("de.richardliebscher.g213d.GDeviceManager", "list", ())?;
+            for device in devices.0 {
+                println!("{}: {}", device.0, device.1);
+            }
         }
     }
 

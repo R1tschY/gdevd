@@ -1,9 +1,13 @@
 use crate::usb_ext::DetachedHandle;
 use crate::{
-    Command, CommandError, CommandResult, Direction, GDevice, GDeviceModel, RgbColor, Speed,
+    Command, CommandError, CommandResult, DeviceType, Direction, GDevice, GDeviceDriver,
+    GDeviceModel, GDeviceModelRef, GModelId, RgbColor, Speed,
 };
 use quick_error::ResultExt;
 use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
+use std::fmt;
+use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 // Standard color, i found this color to produce a white color on my G213
@@ -27,6 +31,43 @@ const INTERFACE: u8 = 0x0001;
 // const DEFAULT_BRIGHTNESS: u8 = 100;
 const DEFAULT_RGB: RgbColor = RgbColor(0x00, 0xA9, 0xE0);
 
+pub struct G213Driver {
+    model: GDeviceModelRef,
+}
+
+impl G213Driver {
+    pub fn new() -> Self {
+        Self {
+            model: Rc::new(G213Model),
+        }
+    }
+}
+
+impl GDeviceDriver for G213Driver {
+    fn get_model(&self) -> GDeviceModelRef {
+        self.model.clone()
+    }
+
+    fn open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>> {
+        self.try_open_device(device)
+            .map_err(|err| {
+                warn!("Failed to open G213 device: {:?}", err);
+                err
+            })
+            .ok()
+    }
+}
+
+impl G213Driver {
+    fn try_open_device(&self, device: &Device<Context>) -> CommandResult<Box<dyn GDevice>> {
+        debug!("Opening device");
+        Ok(Box::new(G213Device {
+            handle: device.open().context("opening G213 USB device")?,
+            model: self.model.clone(),
+        }))
+    }
+}
+
 pub struct G213Model;
 
 impl G213Model {
@@ -41,36 +82,7 @@ impl Default for G213Model {
     }
 }
 
-impl G213Model {
-    fn try_open_device(device: &Device<Context>) -> CommandResult<Box<dyn GDevice>> {
-        Ok(Box::new(G213Device {
-            handle: device.open().context("opening G213 USB device")?,
-        }))
-    }
-
-    fn open_device(device: &Device<Context>) -> Option<Box<dyn GDevice>> {
-        Self::try_open_device(device)
-            .map_err(|err| {
-                warn!("Failed to open G213 device: {:?}", err);
-                err
-            })
-            .ok()
-    }
-}
-
 impl GDeviceModel for G213Model {
-    fn find(&self, devices: &DeviceList<Context>) -> Vec<Box<dyn GDevice>> {
-        devices
-            .iter()
-            .filter(|device| {
-                let device_descriptor = device.device_descriptor().unwrap();
-                device_descriptor.product_id() == ID_PRODUCT
-                    && device_descriptor.vendor_id() == ID_VENDOR
-            })
-            .flat_map(|device| Self::open_device(&device))
-            .collect()
-    }
-
     fn get_sectors(&self) -> u8 {
         5
     }
@@ -82,10 +94,19 @@ impl GDeviceModel for G213Model {
     fn get_name(&self) -> &'static str {
         "G213"
     }
+
+    fn get_type(&self) -> DeviceType {
+        DeviceType::Keyboard
+    }
+
+    fn usb_product_id(&self) -> u16 {
+        ID_PRODUCT
+    }
 }
 
 pub struct G213Device {
     handle: DeviceHandle<Context>,
+    model: GDeviceModelRef,
 }
 
 impl G213Device {
@@ -93,6 +114,8 @@ impl G213Device {
         handle: &mut DeviceHandle<T>,
         data: &UsbCommand,
     ) -> CommandResult<()> {
+        debug!("Sending command");
+
         handle
             .write_control(
                 REQUEST_TYPE,
@@ -240,7 +263,25 @@ impl UsbCommand {
 
 impl GDevice for G213Device {
     fn get_debug_info(&self) -> String {
-        unimplemented!()
+        let usb_device = self.handle.device().device_descriptor().unwrap();
+        format!(
+            "type={:?} manufacturer={:?} product={:?} device_version={:?} serial={}",
+            self.model.get_type(),
+            self.handle
+                .read_manufacturer_string_ascii(&usb_device)
+                .unwrap_or(String::new()),
+            self.handle
+                .read_product_string_ascii(&usb_device)
+                .unwrap_or(String::new()),
+            usb_device.device_version(),
+            self.handle
+                .read_serial_number_string_ascii(&usb_device)
+                .unwrap_or(String::new()),
+        )
+    }
+
+    fn get_model(&self) -> GDeviceModelRef {
+        self.model.clone()
     }
 
     fn send_command(&mut self, cmd: Command) -> CommandResult<()> {

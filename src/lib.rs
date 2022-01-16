@@ -1,4 +1,4 @@
-use rusb::{Context, DeviceList, UsbContext};
+use rusb::{Context, Device, DeviceList, UsbContext};
 use std::fmt;
 #[macro_use]
 extern crate log;
@@ -6,17 +6,21 @@ extern crate log;
 extern crate quick_error;
 
 use crate::config::Config;
-use crate::g213::G213Model;
+use crate::g213::{G213Driver, G213Model};
 use hex::FromHexError;
 use quick_error::ResultExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::rc::Rc;
+use std::sync::Arc;
 
 pub mod config;
 pub mod g213;
 pub mod usb_ext;
+
+const LOGITECH_USB_VENDOR_ID: u16 = 0x046d;
 
 /// RGB color
 #[derive(Clone, Debug)]
@@ -92,22 +96,40 @@ pub enum Command {
     StartEffect(bool),
 }
 
+#[derive(Debug)]
+pub enum DeviceType {
+    Keyboard,
+    Mouse,
+}
+
+pub struct GModelId(String);
+
+pub trait GDeviceDriver {
+    fn get_model(&self) -> GDeviceModelRef;
+    fn open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>>;
+}
+
+pub type GDeviceDriverRef = Box<dyn GDeviceDriver>;
+
 /// model series
 pub trait GDeviceModel {
-    fn find(&self, ctx: &DeviceList<Context>) -> Vec<Box<dyn GDevice>>;
-
     fn get_sectors(&self) -> u8;
 
     fn get_default_color(&self) -> RgbColor;
 
     fn get_name(&self) -> &'static str;
+
+    fn get_type(&self) -> DeviceType;
+
+    fn usb_product_id(&self) -> u16;
 }
 
-pub type GDeviceModelRef = Box<dyn GDeviceModel>;
+pub type GDeviceModelRef = Rc<dyn GDeviceModel>;
 
 /// a device
 pub trait GDevice {
     fn get_debug_info(&self) -> String;
+    fn get_model(&self) -> GDeviceModelRef;
     fn send_command(&mut self, cmd: Command) -> CommandResult<()>;
 }
 
@@ -145,65 +167,87 @@ impl Hash for Box<dyn GDeviceModel> {
 }
 
 pub struct GDeviceManager {
-    _context: Context,
+    context: Context,
     config: Config,
-    devices: HashMap<GDeviceModelRef, Vec<GDeviceRef>>,
+    drivers: Vec<GDeviceDriverRef>,
+    devices: Vec<GDeviceRef>,
 }
 
 impl GDeviceManager {
-    fn get_models() -> Vec<Box<dyn GDeviceModel>> {
-        vec![Box::new(G213Model::new())]
-    }
-
     /// Try to create device manager with USB connection
     pub fn try_new() -> CommandResult<Self> {
         let context = Context::new().context("creating USB context")?;
-        let usb_devices = context.devices().context("listing USB devices")?;
-        let devices = Self::find_devices(&usb_devices);
         let config = Config::load();
-
-        let mut self_ = Self {
-            _context: context,
-            devices,
+        Ok(Self {
+            context,
+            drivers: vec![Box::new(G213Driver::new())],
+            devices: vec![],
             config,
-        };
-        self_.send();
-        Ok(self_)
+        })
     }
 
-    fn find_devices(
-        usb_devices: &DeviceList<Context>,
-    ) -> HashMap<GDeviceModelRef, Vec<GDeviceRef>> {
-        Self::get_models()
-            .into_iter()
-            .map(|model| {
-                let devices = model.find(&usb_devices);
-                (model, devices)
-            })
-            .collect()
+    pub fn load_devices(&mut self) -> CommandResult<()> {
+        info!("Scan devices");
+        let usb_devices = self.context.devices().context("listing USB devices")?;
+        self.devices = usb_devices
+            .iter()
+            .filter_map(|device| self.try_open_device(&device))
+            .collect();
+        info!("Found {} device(s)", self.devices.len());
+        self.apply_config();
+        Ok(())
+    }
+
+    fn find_driver_for_device(&self, device: &Device<Context>) -> Option<&dyn GDeviceDriver> {
+        let descriptor = device.device_descriptor().unwrap();
+        if descriptor.vendor_id() == LOGITECH_USB_VENDOR_ID {
+            self.drivers
+                .iter()
+                .find(|driver| descriptor.product_id() == driver.get_model().usb_product_id())
+                .map(|driver| driver.deref())
+        } else {
+            None
+        }
+    }
+
+    fn try_open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>> {
+        if let Some(driver) = self.find_driver_for_device(&device) {
+            info!("Found device {}", driver.get_model().get_name());
+            driver.open_device(&device)
+        } else {
+            None
+        }
+    }
+
+    /// Send command to all devices
+    pub fn list(&self) -> &[GDeviceRef] {
+        info!("List {} device(s)", self.devices.len());
+        &self.devices
+    }
+
+    /// Send command to all devices
+    pub fn list_drivers(&self) -> &[GDeviceDriverRef] {
+        &self.drivers
     }
 
     /// Send command to all devices
     pub fn send_command(&mut self, cmd: Command) {
-        for (model, devices) in &mut self.devices {
-            for device in devices.iter_mut() {
-                if let Err(err) = device.send_command(cmd.clone()) {
-                    error!("Sending command failed for device: {:?}", err);
-                }
+        for device in &mut self.devices {
+            if let Err(err) = device.send_command(cmd.clone()) {
+                error!("Sending command failed for device: {:?}", err);
             }
 
-            self.config.save_command(model.deref(), cmd.clone())
+            self.config.save_command(&*device.get_model(), cmd.clone())
         }
     }
 
     /// Send current config to device
-    pub fn send(&mut self) {
-        for (model, devices) in &mut self.devices {
-            for command in self.config.commands_for(model.deref()) {
-                for device in devices.iter_mut() {
-                    if let Err(err) = device.send_command(command.clone()) {
-                        error!("Sending command failed for device: {:?}", err);
-                    }
+    pub fn apply_config(&mut self) {
+        for device in &mut self.devices {
+            info!("Setting config for {}", device.get_model().get_name());
+            for command in self.config.commands_for(&*device.get_model()) {
+                if let Err(err) = device.send_command(command.clone()) {
+                    error!("Sending command failed for device: {:?}", err);
                 }
             }
         }
@@ -211,8 +255,9 @@ impl GDeviceManager {
 
     /// Refresh config from filesystem and send config
     pub fn refresh(&mut self) {
+        info!("Refreshing");
         self.config = Config::load();
-        self.send();
+        self.apply_config();
     }
 }
 
