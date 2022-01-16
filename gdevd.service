@@ -1,14 +1,14 @@
 [Unit]
-Description=G213 Daemon
+Description=Logitech Gaming Devices Daemon
 After=suspend.target
 After=hibernate.target
 After=hybrid-sleep.target
 
 [Service]
 Type=dbus
-BusName=de.richardliebscher.g213d
+BusName=de.richardliebscher.gdevd
 Environment="RUST_LOG=INFO"
-ExecStart=/usr/local/bin/g213d
+ExecStart=/usr/local/bin/gdevd
 
 [Install]
 WantedBy=multi-user.target

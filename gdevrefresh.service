@@ -1,13 +1,13 @@
 [Unit]
-Description=G213 Refresh
-Requires=g213d.service
+Description=Logitech Gaming Devices Refresh
+Requires=gdevd.service
 After=suspend.target
 After=hibernate.target
 After=hybrid-sleep.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/g213ctl refresh
+ExecStart=/usr/local/bin/gdevctl refresh
 
 [Install]
 WantedBy=suspend.target

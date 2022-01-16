@@ -6,7 +6,7 @@ use std::time::Duration;
 
 #[derive(StructOpt)]
 #[structopt(
-    about = "Change color of Logitech G213 keyboards",
+    about = "Change color of Logitech Gaming devices",
     rename_all = "kebab"
 )]
 enum Cli {
@@ -51,7 +51,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     // DBus
     let conn = Connection::new_system()?;
     let devices = conn.with_proxy(
-        "de.richardliebscher.g213d",
+        "de.richardliebscher.gdevd",
         "/devices",
         Duration::from_millis(5000),
     );
@@ -62,45 +62,45 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
             sector: Some(sector),
         } => {
             devices.method_call(
-                "de.richardliebscher.g213d.GDeviceManager",
+                "de.richardliebscher.gdevd.GDeviceManager",
                 "color_sector",
                 (&color as &str, sector),
             )?;
         }
         Cli::Color { color, sector: _ } => {
             devices.method_call(
-                "de.richardliebscher.g213d.GDeviceManager",
+                "de.richardliebscher.gdevd.GDeviceManager",
                 "color_sectors",
                 (&color as &str,),
             )?;
         }
         Cli::Breathe { color, speed } => {
             devices.method_call(
-                "de.richardliebscher.g213d.GDeviceManager",
+                "de.richardliebscher.gdevd.GDeviceManager",
                 "breathe",
                 (color, speed),
             )?;
         }
         Cli::Cycle { speed } => {
             devices.method_call(
-                "de.richardliebscher.g213d.GDeviceManager",
+                "de.richardliebscher.gdevd.GDeviceManager",
                 "cycle",
                 (speed,),
             )?;
         }
         Cli::Wave { direction, speed } => {
             devices.method_call(
-                "de.richardliebscher.g213d.GDeviceManager",
+                "de.richardliebscher.gdevd.GDeviceManager",
                 "wave",
                 (&direction as &str, speed),
             )?;
         }
         Cli::Refresh => {
-            devices.method_call("de.richardliebscher.g213d.GDeviceManager", "refresh", ())?;
+            devices.method_call("de.richardliebscher.gdevd.GDeviceManager", "refresh", ())?;
         }
         Cli::ListDrivers => {
             let drivers: (Vec<(String,)>,) = devices.method_call(
-                "de.richardliebscher.g213d.GDeviceManager",
+                "de.richardliebscher.gdevd.GDeviceManager",
                 "list_drivers",
                 (),
             )?;
@@ -110,7 +110,7 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
         }
         Cli::List => {
             let devices: (Vec<(String, String)>,) =
-                devices.method_call("de.richardliebscher.g213d.GDeviceManager", "list", ())?;
+                devices.method_call("de.richardliebscher.gdevd.GDeviceManager", "list", ())?;
             for device in devices.0 {
                 println!("{}: {}", device.0, device.1);
             }

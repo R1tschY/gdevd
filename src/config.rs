@@ -3,7 +3,7 @@ use ini::ini::Properties;
 use ini::Ini;
 use std::convert::TryInto;
 
-const CONFIG_PATH: &str = "/etc/g213d.conf";
+const CONFIG_PATH: &str = "/etc/gdevd.conf";
 
 pub struct Config(Ini);
 

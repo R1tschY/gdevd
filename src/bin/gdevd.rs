@@ -29,7 +29,7 @@ impl tree::DataType for TreeData {
 
 fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
     let f = Factory::new_fn::<TreeData>();
-    f.interface("de.richardliebscher.g213d.GDeviceManager", ())
+    f.interface("de.richardliebscher.gdevd.GDeviceManager", ())
         .add_m(
             f.method("list_drivers", (), move |m| {
                 let mut manager = m.path.get_data().borrow_mut();
@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     simple_logger::init()?;
 
     let mut c = LocalConnection::new_system()?;
-    c.request_name("de.richardliebscher.g213d", false, true, true)?;
+    c.request_name("de.richardliebscher.gdevd", false, true, true)?;
 
     let device_manager_if = create_interface();
     let mut device_manager = GDeviceManager::try_new()?;

@@ -6,7 +6,7 @@ extern crate log;
 extern crate quick_error;
 
 use crate::config::Config;
-use crate::g213::{G213Driver, G213Model};
+use crate::drivers::g213::{G213Driver, G213Model};
 use hex::FromHexError;
 use quick_error::ResultExt;
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 pub mod config;
-pub mod g213;
+pub mod drivers;
 pub mod usb_ext;
 
 const LOGITECH_USB_VENDOR_ID: u16 = 0x046d;
