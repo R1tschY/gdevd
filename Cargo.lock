@@ -79,6 +79,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dbus"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de0a745c25b32caa56b82a3950f5fec7893a960f4c10ca3b02060b0c38d8c2ce"
+dependencies = [
+ "libc",
+ "libdbus-sys",
+ "winapi",
+]
+
+[[package]]
 name = "dlv-list"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,6 +103,7 @@ name = "gdev"
 version = "0.1.0"
 dependencies = [
  "dbus",
+ "dbus-tree",
  "hex",
  "log",
  "quick-error",

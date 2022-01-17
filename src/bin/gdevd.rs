@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dbus::blocking::LocalConnection;
-use dbus::tree;
-use dbus::tree::{Factory, Interface, MTFn, MethodErr};
+use dbus::MethodErr;
+use dbus_tree::{Factory, Interface, MTFn};
 
 use gdev::Command::{Breathe, ColorSector, Cycle, Wave};
 use gdev::{Brightness, CommandError, GDeviceManager, RgbColor};
@@ -18,7 +18,7 @@ use std::convert::{TryFrom, TryInto};
 #[derive(Copy, Clone, Default, Debug)]
 struct TreeData;
 
-impl tree::DataType for TreeData {
+impl dbus_tree::DataType for TreeData {
     type Tree = ();
     type ObjectPath = Arc<RefCell<GDeviceManager>>;
     type Property = ();
