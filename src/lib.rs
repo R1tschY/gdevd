@@ -185,7 +185,6 @@ quick_error! {
     pub enum CommandError {
         Usb(context: String, err: rusb::Error) {
             display("USB error: {}: {}", context, err)
-            cause(err)
             context(message: &'a str, err: rusb::Error)
                 -> (message.to_string(), err)
         }
