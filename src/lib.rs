@@ -6,6 +6,7 @@ extern crate log;
 extern crate quick_error;
 
 use crate::config::Config;
+use crate::drivers::g203_lightsync::G203LightsyncDriver;
 use crate::drivers::g213::{G213Driver, G213Model};
 use hex::FromHexError;
 use quick_error::ResultExt;
@@ -27,14 +28,17 @@ const LOGITECH_USB_VENDOR_ID: u16 = 0x046d;
 pub struct RgbColor(pub u8, pub u8, pub u8);
 
 impl RgbColor {
+    #[inline]
     pub fn red(&self) -> u8 {
         self.0
     }
 
+    #[inline]
     pub fn green(&self) -> u8 {
         self.1
     }
 
+    #[inline]
     pub fn blue(&self) -> u8 {
         self.2
     }
@@ -49,6 +53,7 @@ impl RgbColor {
         hex::encode(&[self.0, self.1, self.2])
     }
 
+    #[inline]
     pub fn to_int(&self) -> u32 {
         ((self.0 as u32) << 16) | ((self.1 as u32) << 8) | (self.2 as u32)
     }
@@ -81,8 +86,46 @@ impl TryFrom<&str> for Direction {
 pub struct Speed(u16);
 
 impl From<u16> for Speed {
+    #[inline]
     fn from(input: u16) -> Self {
         Speed(input)
+    }
+}
+
+/// DPI
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+pub struct Dpi(u16);
+
+impl From<u16> for Dpi {
+    #[inline]
+    fn from(input: u16) -> Self {
+        Dpi(input)
+    }
+}
+
+/// Brightness
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+pub struct Brightness(u8);
+
+impl Default for Brightness {
+    #[inline]
+    fn default() -> Self {
+        Brightness(100)
+    }
+}
+
+impl TryFrom<u8> for Brightness {
+    type Error = CommandError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value <= 100 {
+            Ok(Brightness(value))
+        } else {
+            Err(CommandError::InvalidArgument(
+                "brightness",
+                format!("{} < {}", value, 100),
+            ))
+        }
     }
 }
 
@@ -90,10 +133,12 @@ impl From<u16> for Speed {
 #[derive(Clone, Debug)]
 pub enum Command {
     ColorSector(RgbColor, Option<u8>),
-    Breathe(RgbColor, Speed),
-    Cycle(Speed),
-    Wave(Direction, Speed),
+    Breathe(RgbColor, Option<Speed>, Option<Brightness>),
+    Cycle(Option<Speed>, Option<Brightness>),
+    Wave(Direction, Option<Speed>, Option<Brightness>),
+    Blend(Option<Speed>, Option<Brightness>),
     StartEffect(bool),
+    Dpi(Dpi),
 }
 
 #[derive(Debug)]
@@ -147,6 +192,9 @@ quick_error! {
         InvalidArgument(arg: &'static str, msg: String) {
             display("Invalid argument {}: {}", arg, msg)
         }
+        InvalidCommand {
+            display("Invalid command")
+        }
     }
 }
 
@@ -180,7 +228,10 @@ impl GDeviceManager {
         let config = Config::load();
         Ok(Self {
             context,
-            drivers: vec![Box::new(G213Driver::new())],
+            drivers: vec![
+                Box::new(G213Driver::new()),
+                Box::new(G203LightsyncDriver::new()),
+            ],
             devices: vec![],
             config,
         })

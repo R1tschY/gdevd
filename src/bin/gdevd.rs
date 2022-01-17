@@ -11,9 +11,9 @@ use dbus::tree;
 use dbus::tree::{Factory, Interface, MTFn, MethodErr};
 
 use gdev::Command::{Breathe, ColorSector, Cycle, Wave};
-use gdev::{GDeviceManager, RgbColor};
+use gdev::{Brightness, CommandError, GDeviceManager, RgbColor};
 use std::cell::RefCell;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, Default, Debug)]
 struct TreeData;
@@ -27,7 +27,17 @@ impl tree::DataType for TreeData {
     type Signal = ();
 }
 
+fn parse_brightness(brightness: u8) -> Result<Option<Brightness>, MethodErr> {
+    match Brightness::try_from(brightness) {
+        Ok(brightness) => Ok(Some(brightness)),
+        Err(_) => Err(MethodErr::invalid_arg(
+            "brightness must be between 0 and 100",
+        )),
+    }
+}
+
 fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
+    // TODO: missing commands: start, blend, dpi
     let f = Factory::new_fn::<TreeData>();
     f.interface("de.richardliebscher.gdevd.GDeviceManager", ())
         .add_m(
@@ -88,47 +98,61 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         .add_m(
             f.method("breathe", (), move |m| {
                 let mut manager = m.path.get_data().borrow_mut();
-                let (color, speed): (&str, u16) = m.msg.read2()?;
+                let (color, speed, brightness): (&str, u16, u8) = m.msg.read3()?;
                 let rgb =
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
 
-                info!("Set breathe mode with {} and {}", color, speed);
-                manager.send_command(Breathe(rgb, speed.into()));
+                info!(
+                    "Set breathe mode: color={} speed={} brightness={}",
+                    color, speed, brightness
+                );
+                manager.send_command(Breathe(
+                    rgb,
+                    Some(speed.into()),
+                    parse_brightness(brightness)?,
+                ));
 
                 Ok(vec![m.msg.method_return()])
             })
             .inarg::<&str, _>("color")
-            .inarg::<u16, _>("speed"),
+            .inarg::<u16, _>("speed")
+            .inarg::<u8, _>("brightness"),
         )
         .add_m(
             f.method("cycle", (), move |m| {
                 let mut manager = m.path.get_data().borrow_mut();
-                let speed: u16 = m.msg.read1()?;
+                let (speed, brightness): (u16, u8) = m.msg.read2()?;
 
-                info!("Set cycle mode with {}", speed);
-                manager.send_command(Cycle(speed.into()));
+                info!("Set cycle mode: speed={} brightness={}", speed, brightness);
+                manager.send_command(Cycle(Some(speed.into()), parse_brightness(brightness)?));
 
                 Ok(vec![m.msg.method_return()])
             })
-            .inarg::<u16, _>("speed"),
+            .inarg::<u16, _>("speed")
+            .inarg::<u8, _>("brightness"),
         )
         .add_m(
             f.method("wave", (), move |m| {
                 let mut manager = m.path.get_data().borrow_mut();
-                let (direction, speed): (&str, u16) = m.msg.read2()?;
+                let (direction, speed, brightness): (&str, u16, u8) = m.msg.read3()?;
 
-                info!("Set wave with {} in {:?}", speed, direction);
+                info!(
+                    "Set wave: speed={} direction={:?} brightness={}",
+                    speed, direction, brightness
+                );
                 manager.send_command(Wave(
                     direction
                         .try_into()
                         .map_err(|_err| MethodErr::invalid_arg("direction"))?,
-                    speed.into(),
+                    Some(speed.into()),
+                    parse_brightness(brightness)?,
                 ));
 
                 Ok(vec![m.msg.method_return()])
             })
             .inarg::<&str, _>("direction")
-            .inarg::<u16, _>("speed"),
+            .inarg::<u16, _>("speed")
+            .inarg::<u8, _>("brightness"),
         )
         .add_m(f.method("refresh", (), move |m| {
             let mut manager = m.path.get_data().borrow_mut();
@@ -141,7 +165,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    simple_logger::init()?;
+    simple_logger::init_by_env();
 
     let mut c = LocalConnection::new_system()?;
     c.request_name("de.richardliebscher.gdevd", false, true, true)?;

@@ -1,5 +1,5 @@
-use crate::{Command, Direction, GDeviceModel, RgbColor, Speed};
-use ini::ini::Properties;
+use crate::{Brightness, Command, CommandError, Direction, GDeviceModel, RgbColor, Speed};
+use ini::ini::{Properties, SectionSetter};
 use ini::Ini;
 use std::convert::TryInto;
 
@@ -47,11 +47,16 @@ impl Config {
             Some("breath") => vec![Command::Breathe(
                 self.parse_color_prop(props, model, "color"),
                 self.parse_speed(props, model, "speed"),
+                self.parse_brightness(props, model, "brightness"),
             )],
-            Some("cycle") => vec![Command::Cycle(self.parse_speed(props, model, "speed"))],
+            Some("cycle") => vec![Command::Cycle(
+                self.parse_speed(props, model, "speed"),
+                self.parse_brightness(props, model, "brightness"),
+            )],
             Some("wave") => vec![Command::Wave(
                 self.parse_direction(props, model, "direction"),
                 self.parse_speed(props, model, "speed"),
+                self.parse_brightness(props, model, "brightness"),
             )],
             Some("startEffect") => vec![Command::StartEffect(
                 self.parse_bool(props, model, "state").unwrap_or(true),
@@ -86,10 +91,15 @@ impl Config {
         model.get_default_color()
     }
 
-    fn parse_speed(&self, props: &Properties, model: &dyn GDeviceModel, key: &str) -> Speed {
+    fn parse_speed(
+        &self,
+        props: &Properties,
+        model: &dyn GDeviceModel,
+        key: &str,
+    ) -> Option<Speed> {
         if let Some(speed) = props.get(key) {
             if let Ok(speed) = speed.parse::<u16>() {
-                return Speed(speed);
+                return Some(Speed(speed));
             } else {
                 warn!(
                     "Invalid speed {} for {}.{} ignored",
@@ -100,7 +110,30 @@ impl Config {
             }
         }
 
-        Speed(65535 / 2)
+        None
+    }
+
+    fn parse_brightness(
+        &self,
+        props: &Properties,
+        model: &dyn GDeviceModel,
+        key: &str,
+    ) -> Option<Brightness> {
+        if let Some(brightness) = props.get(key) {
+            if let Ok(brightness) = brightness.parse::<u8>() {
+                if brightness <= 100 {
+                    return Some(Brightness(brightness));
+                }
+            }
+            warn!(
+                "Invalid brightness {} for {}.{} ignored",
+                brightness,
+                model.get_name(),
+                key
+            );
+        }
+
+        None
     }
 
     fn parse_direction(
@@ -156,39 +189,67 @@ impl Config {
                     setter = setter.set(format!("color-{}", i), color.to_hex());
                 }
             }
-            Command::Breathe(color, speed) => {
-                section
-                    .set("type", "breathe")
-                    .set("color", color.to_hex())
-                    .set("speed", speed.0.to_string());
+            Command::Breathe(color, speed, brightness) => {
+                let section = section.set("type", "breathe").set("color", color.to_hex());
+                let section = Self::set_speed(section, speed);
+                Self::set_brightness(section, brightness);
             }
-            Command::Cycle(speed) => {
-                section
-                    .set("type", "cycle")
-                    .set("speed", speed.0.to_string());
+            Command::Cycle(speed, brightness) => {
+                let section = section.set("type", "cycle");
+                let section = Self::set_speed(section, speed);
+                Self::set_brightness(section, brightness);
             }
-            Command::Wave(direction, speed) => {
-                section
-                    .set("type", "wave")
-                    .set(
-                        "direction",
-                        match direction {
-                            Direction::LeftToRight => "left-to-right",
-                            Direction::RightToLeft => "right-to-left",
-                            Direction::CenterToEdge => "center-to-edge",
-                            Direction::EdgeToCenter => "edge-to-center",
-                        },
-                    )
-                    .set("speed", speed.0.to_string());
+            Command::Wave(direction, speed, brightness) => {
+                let section = section.set("type", "wave").set(
+                    "direction",
+                    match direction {
+                        Direction::LeftToRight => "left-to-right",
+                        Direction::RightToLeft => "right-to-left",
+                        Direction::CenterToEdge => "center-to-edge",
+                        Direction::EdgeToCenter => "edge-to-center",
+                    },
+                );
+                let section = Self::set_speed(section, speed);
+                Self::set_brightness(section, brightness);
             }
             Command::StartEffect(state) => {
                 section
                     .set("type", "startEffect")
                     .set("state", if state { "true" } else { "false" });
             }
+            Command::Blend(speed, brightness) => {
+                let section = section.set("type", "blend");
+                let section = Self::set_speed(section, speed);
+                Self::set_brightness(section, brightness);
+            }
+            Command::Dpi(dpi) => {
+                section.set("type", "dpi").set("dpi", dpi.0.to_string());
+            }
         }
         self.0.write_to_file(CONFIG_PATH).unwrap_or_else(|err| {
             error!("Failed to write config file {}: {:?}", CONFIG_PATH, err);
         });
+    }
+
+    fn set_speed<'a>(
+        section: &'a mut SectionSetter<'a>,
+        speed: Option<Speed>,
+    ) -> &'a mut SectionSetter<'a> {
+        if let Some(speed) = speed {
+            section.set("speed", speed.0.to_string())
+        } else {
+            section.delete(&"speed")
+        }
+    }
+
+    fn set_brightness<'a>(
+        section: &'a mut SectionSetter<'a>,
+        brightness: Option<Brightness>,
+    ) -> &'a mut SectionSetter<'a> {
+        if let Some(brightness) = brightness {
+            section.set("brightness", brightness.0.to_string())
+        } else {
+            section.delete(&"brightness")
+        }
     }
 }

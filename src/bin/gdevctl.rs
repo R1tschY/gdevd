@@ -21,21 +21,30 @@ enum Cli {
     Breathe {
         /// Hex string for color
         color: String,
-        /// speed inverse (must be greater than 31; default is 1000)
-        speed: u16,
+        /// animation time step in milliseconds
+        /// (minimum value depends on device, default value depends on device)
+        time_step: u16,
+        /// brightness (must be greater or equal than 0 and less or equal than 100; default is 100)
+        brightness: u8,
     },
     /// Apply cycle effect
     Cycle {
-        /// speed inverse (must be greater than 31; default is 1000)
-        speed: u16,
+        /// animation time step in milliseconds
+        /// (minimum value depends on device, default value depends on device)
+        time_step: u16,
+        /// brightness (must be greater or equal than 0 and less or equal than 100; default is 100)
+        brightness: u8,
     },
     /// Apply wave effect
     Wave {
         /// direction of effect (left-to-right, right-to-left, center-to-edge, edge-to-center;
         ///   default is left-to-right)
         direction: String,
-        /// speed inverse (must be greater than 31, default is 1000)
-        speed: u16,
+        /// animation time step in milliseconds
+        /// (minimum value depends on device, default value depends on device)
+        time_step: u16,
+        /// brightness (must be greater or equal than 0 and less or equal than 100; default is 100)
+        brightness: u8,
     },
     /// Reapply saved effect
     Refresh,
@@ -74,25 +83,36 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
                 (&color as &str,),
             )?;
         }
-        Cli::Breathe { color, speed } => {
+        Cli::Breathe {
+            color,
+            time_step,
+            brightness,
+        } => {
             devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "breathe",
-                (color, speed),
+                (color, time_step, brightness),
             )?;
         }
-        Cli::Cycle { speed } => {
+        Cli::Cycle {
+            time_step,
+            brightness,
+        } => {
             devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "cycle",
-                (speed,),
+                (time_step, brightness),
             )?;
         }
-        Cli::Wave { direction, speed } => {
+        Cli::Wave {
+            direction,
+            time_step,
+            brightness,
+        } => {
             devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "wave",
-                (&direction as &str, speed),
+                (&direction as &str, time_step, brightness),
             )?;
         }
         Cli::Refresh => {

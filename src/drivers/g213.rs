@@ -1,7 +1,8 @@
+use crate::drivers::{DeviceDescription, GUsbDriver};
 use crate::usb_ext::DetachedHandle;
 use crate::{
-    Command, CommandError, CommandResult, DeviceType, Direction, GDevice, GDeviceDriver,
-    GDeviceModel, GDeviceModelRef, GModelId, RgbColor, Speed,
+    Brightness, Command, CommandError, CommandResult, DeviceType, Direction, Dpi, GDevice,
+    GDeviceDriver, GDeviceModel, GDeviceModelRef, GModelId, RgbColor, Speed,
 };
 use quick_error::ResultExt;
 use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
@@ -10,26 +11,14 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-// Standard color, i found this color to produce a white color on my G213
-//const STANDARD_COLOR_HEX: &str = "ffb4aa";
-// The id of the Logitech company
-const ID_VENDOR: u16 = 0x046d;
-// The id of the G213
-const ID_PRODUCT: u16 = 0xc336;
-// Endpoint to read data back from
-const ENDPOINT_ADDRESS: u8 = 0x82;
-// --.
-const REQUEST_TYPE: u8 = 0x21;
-//    \ The control transfer
-const REQUEST: u8 = 0x09;
-//    / configuration for the G213
-const VALUE: i32 = 0x0211;
-// --'
-const INTERFACE: u8 = 0x0001;
-
-// const DEFAULT_FREQUENCY: u16 = 1000;
-// const DEFAULT_BRIGHTNESS: u8 = 100;
 const DEFAULT_RGB: RgbColor = RgbColor(0x00, 0xA9, 0xE0);
+
+const DEVICE: DeviceDescription = DeviceDescription {
+    product_id: 0xc336,
+    min_speed: 32,
+    default_speed: Speed(1000),
+    min_dpi: Dpi(u16::MAX),
+};
 
 pub struct G213Driver {
     model: GDeviceModelRef,
@@ -49,22 +38,12 @@ impl GDeviceDriver for G213Driver {
     }
 
     fn open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>> {
-        self.try_open_device(device)
-            .map_err(|err| {
-                warn!("Failed to open G213 device: {:?}", err);
-                err
-            })
-            .ok()
-    }
-}
-
-impl G213Driver {
-    fn try_open_device(&self, device: &Device<Context>) -> CommandResult<Box<dyn GDevice>> {
-        debug!("Opening device");
-        Ok(Box::new(G213Device {
-            handle: device.open().context("opening G213 USB device")?,
-            model: self.model.clone(),
-        }))
+        GUsbDriver::open_device(&DEVICE, device).map(|driver| {
+            Box::new(G213Device {
+                driver,
+                model: self.model.clone(),
+            }) as Box<dyn GDevice>
+        })
     }
 }
 
@@ -100,58 +79,20 @@ impl GDeviceModel for G213Model {
     }
 
     fn usb_product_id(&self) -> u16 {
-        ID_PRODUCT
+        DEVICE.product_id
     }
 }
 
 pub struct G213Device {
-    handle: DeviceHandle<Context>,
+    driver: GUsbDriver,
     model: GDeviceModelRef,
 }
 
-impl G213Device {
-    fn send_data<'t, T: UsbContext>(
-        handle: &mut DeviceHandle<T>,
-        data: &UsbCommand,
-    ) -> CommandResult<()> {
-        debug!("Sending command");
-
-        handle
-            .write_control(
-                REQUEST_TYPE,
-                REQUEST,
-                VALUE as u16,
-                INTERFACE as u16,
-                &data.bytes,
-                Duration::from_secs(5),
-            )
-            .context("write_control")?;
-
-        let mut data = [0u8; 20];
-        handle
-            .read_interrupt(ENDPOINT_ADDRESS, &mut data, Duration::from_secs(5))
-            .context("read_interrupt")?;
-
-        Ok(())
-    }
-}
-
-fn check_speed(speed: Speed) -> CommandResult<()> {
-    if speed.0 < 32 {
-        Err(CommandError::InvalidArgument(
-            "speed",
-            format!("{} < 32", speed.0),
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-struct UsbCommand {
+struct DeviceCommand {
     bytes: [u8; 20],
 }
 
-impl UsbCommand {
+impl DeviceCommand {
     pub fn for_color(color: RgbColor) -> Self {
         Self::new(&[
             0x11,
@@ -261,23 +202,20 @@ impl UsbCommand {
     }
 }
 
+fn brightness_unsupported(brightness: Option<Brightness>) -> CommandResult<()> {
+    if brightness.is_some() && brightness != Some(Brightness::default()) {
+        Err(CommandError::InvalidArgument(
+            "brightness",
+            "brightness is not supported by G213".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 impl GDevice for G213Device {
     fn get_debug_info(&self) -> String {
-        let usb_device = self.handle.device().device_descriptor().unwrap();
-        format!(
-            "type={:?} manufacturer={:?} product={:?} device_version={:?} serial={}",
-            self.model.get_type(),
-            self.handle
-                .read_manufacturer_string_ascii(&usb_device)
-                .unwrap_or(String::new()),
-            self.handle
-                .read_product_string_ascii(&usb_device)
-                .unwrap_or(String::new()),
-            usb_device.device_version(),
-            self.handle
-                .read_serial_number_string_ascii(&usb_device)
-                .unwrap_or(String::new()),
-        )
+        self.driver.debug_info()
     }
 
     fn get_model(&self) -> GDeviceModelRef {
@@ -287,10 +225,8 @@ impl GDevice for G213Device {
     fn send_command(&mut self, cmd: Command) -> CommandResult<()> {
         use Command::*;
 
-        let mut handle = DetachedHandle::new(&mut self.handle, INTERFACE)
-            .context("detaching USB device from kernel")?;
-
-        Self::send_data(&mut handle, &UsbCommand::for_reset())?;
+        let interface = self.driver.open_interface()?;
+        interface.send_data(&DeviceCommand::for_reset().bytes)?;
 
         match cmd {
             ColorSector(rgb, sector) => {
@@ -301,26 +237,29 @@ impl GDevice for G213Device {
                             format!("{} > 4", sector),
                         ));
                     }
-                    Self::send_data(&mut handle, &UsbCommand::for_region_color(sector, rgb))
+                    interface.send_data(&DeviceCommand::for_region_color(sector, rgb).bytes)
                 } else {
-                    Self::send_data(&mut handle, &UsbCommand::for_color(rgb))
+                    interface.send_data(&DeviceCommand::for_color(rgb).bytes)
                 }
             }
-            Breathe(rgb, speed) => {
-                check_speed(speed)?;
-                Self::send_data(&mut handle, &UsbCommand::for_breathe(rgb, speed))
+            Breathe(rgb, speed, brightness) => {
+                brightness_unsupported(brightness)?;
+                interface
+                    .send_data(&DeviceCommand::for_breathe(rgb, DEVICE.get_speed(speed)?).bytes)
             }
-            Cycle(speed) => {
-                check_speed(speed)?;
-                Self::send_data(&mut handle, &UsbCommand::for_cycle(speed))
+            Cycle(speed, brightness) => {
+                brightness_unsupported(brightness)?;
+                interface.send_data(&DeviceCommand::for_cycle(DEVICE.get_speed(speed)?).bytes)
             }
-            Wave(direction, speed) => {
-                check_speed(speed)?;
-                Self::send_data(&mut handle, &UsbCommand::for_wave(direction, speed))
+            Wave(direction, speed, brightness) => {
+                brightness_unsupported(brightness)?;
+                interface
+                    .send_data(&DeviceCommand::for_wave(direction, DEVICE.get_speed(speed)?).bytes)
             }
             StartEffect(state) => {
-                Self::send_data(&mut handle, &UsbCommand::for_start_effect(state))
+                interface.send_data(&DeviceCommand::for_start_effect(state).bytes)
             }
+            _ => Err(CommandError::InvalidCommand),
         }
     }
 }

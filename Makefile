@@ -11,3 +11,13 @@ install:
 	install gdevrefresh.service /etc/systemd/system/gdevrefresh.service
 	systemctl daemon-reload
 	systemctl restart gdevd
+
+uninstall:
+	systemctl stop gdevd || true
+	systemctl clean gdevd || true
+	systemctl daemon-reload || true
+	rm /usr/local/bin/gdevd 2> /dev/null || true
+	rm /usr/local/bin/gdevctl 2> /dev/null || true
+	rm /etc/dbus-1/system.d/gdevd-dbus.conf 2> /dev/null || true
+	rm /etc/systemd/system/gdevd.service 2> /dev/null || true
+	rm /etc/systemd/system/gdevrefresh.service 2> /dev/null || true
