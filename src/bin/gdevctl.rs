@@ -6,7 +6,7 @@ use std::time::Duration;
 
 #[derive(StructOpt)]
 #[structopt(
-    about = "Change color of Logitech Gaming devices",
+    about = "Change background lights of Logitech gaming devices",
     rename_all = "kebab"
 )]
 enum Cli {
