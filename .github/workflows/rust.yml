@@ -10,6 +10,9 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install OS dependencies
+        run: apt install libdbus-1-dev pkg-config
+
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
