@@ -1,7 +1,9 @@
 use crate::usb_ext::DetachedHandle;
 use crate::{CommandError, CommandResult, Dpi, GDevice, Speed};
 use quick_error::ResultExt;
-use rusb::{Context, Device, DeviceHandle, UsbContext};
+use rusb::{
+    request_type, Context, Device, DeviceHandle, Direction, Recipient, RequestType, UsbContext,
+};
 use std::time::Duration;
 
 pub mod g203_lightsync;
@@ -9,25 +11,32 @@ pub mod g213;
 
 // USB interface constants
 const ENDPOINT_ADDRESS: u8 = 0x82;
-const REQUEST_TYPE: u8 = 0x21;
-const REQUEST: u8 = 0x09;
+const REQUEST_TYPE: u8 = 0x21; // request_type(Direction::Out, RequestType::Class, Recipient::Interface);
+const REQUEST: u8 = 0x09; // HID_REQ_SET_REPORT
 const VALUE: i32 = 0x0211;
 const INTERFACE: u8 = 0x0001;
 
 struct DeviceDescription {
     product_id: u16,
-    min_speed: u16,
+    min_speed: Speed,
     default_speed: Speed,
+    max_speed: Speed,
     min_dpi: Dpi,
 }
 
 impl DeviceDescription {
     fn get_speed(&self, speed: Option<Speed>) -> CommandResult<Speed> {
         if let Some(speed) = speed {
-            if speed.0 < self.min_speed {
+            if speed < self.min_speed {
                 return Err(CommandError::InvalidArgument(
                     "speed",
-                    format!("{} < {}", speed.0, self.min_speed),
+                    format!("{} < {}", speed.0, self.min_speed.0),
+                ));
+            }
+            if speed > self.max_speed {
+                return Err(CommandError::InvalidArgument(
+                    "speed",
+                    format!("{} > {}", speed.0, self.max_speed.0),
                 ));
             }
         }
@@ -39,7 +48,7 @@ impl DeviceDescription {
         if dpi < self.min_dpi {
             Err(CommandError::InvalidArgument(
                 "speed",
-                format!("{} < {}", dpi.0, self.min_speed),
+                format!("{} < {}", dpi.0, self.min_dpi.0),
             ))
         } else {
             Ok(())

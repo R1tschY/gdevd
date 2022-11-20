@@ -15,8 +15,9 @@ const DEFAULT_RGB: RgbColor = RgbColor(0x00, 0xA9, 0xE0);
 
 const DEVICE: DeviceDescription = DeviceDescription {
     product_id: 0xc336,
-    min_speed: 32,
+    min_speed: Speed(32), // ???
     default_speed: Speed(1000),
+    max_speed: Speed(u16::MAX), // ???
     min_dpi: Dpi(u16::MAX),
 };
 
