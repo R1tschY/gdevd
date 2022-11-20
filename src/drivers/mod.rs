@@ -1,10 +1,10 @@
-use crate::usb_ext::DetachedHandle;
-use crate::{CommandError, CommandResult, Dpi, GDevice, Speed};
-use quick_error::ResultExt;
-use rusb::{
-    request_type, Context, Device, DeviceHandle, Direction, Recipient, RequestType, UsbContext,
-};
 use std::time::Duration;
+
+use quick_error::ResultExt;
+use rusb::{Context, Device, DeviceHandle};
+
+use crate::usb_ext::DetachedHandle;
+use crate::{CommandError, CommandResult, Dpi, Speed};
 
 pub mod g203_lightsync;
 pub mod g213;
@@ -21,6 +21,7 @@ struct DeviceDescription {
     min_speed: Speed,
     default_speed: Speed,
     max_speed: Speed,
+    #[allow(unused)]
     min_dpi: Dpi,
 }
 
@@ -43,6 +44,7 @@ impl DeviceDescription {
         Ok(speed.unwrap_or(self.default_speed))
     }
 
+    #[allow(unused)]
     fn check_dpi(&self, dpi: Dpi) -> CommandResult<()> {
         assert_ne!(self.min_dpi.0, u16::MAX);
         if dpi < self.min_dpi {
@@ -114,7 +116,9 @@ impl GUsbDriver {
 }
 
 struct GInterface<'t> {
+    #[allow(unused)]
     handle: DetachedHandle<'t, Context>,
+    #[allow(unused)]
     description: &'static DeviceDescription,
 }
 

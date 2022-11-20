@@ -1,21 +1,21 @@
-use rusb::{Context, Device, DeviceList, UsbContext};
-use std::fmt;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate quick_error;
 
-use crate::config::Config;
-use crate::drivers::g203_lightsync::G203LightsyncDriver;
-use crate::drivers::g213::{G213Driver, G213Model};
-use hex::FromHexError;
-use quick_error::ResultExt;
-use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::Arc;
+
+use hex::FromHexError;
+use quick_error::ResultExt;
+use rusb::{Context, Device, UsbContext};
+
+use crate::config::Config;
+use crate::drivers::g203_lightsync::G203LightsyncDriver;
+use crate::drivers::g213::G213Driver;
 
 pub mod config;
 pub mod drivers;

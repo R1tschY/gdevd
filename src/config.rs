@@ -1,6 +1,8 @@
-use crate::{Brightness, Command, CommandError, Direction, GDeviceModel, RgbColor, Speed};
-use ini::{Ini, Properties, SectionSetter};
 use std::convert::TryInto;
+
+use ini::{Ini, Properties, SectionSetter};
+
+use crate::{Brightness, Command, Direction, GDeviceModel, RgbColor, Speed};
 
 const CONFIG_PATH: &str = "/etc/gdevd.conf";
 

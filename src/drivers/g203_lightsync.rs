@@ -1,16 +1,14 @@
+use std::rc::Rc;
+
+use rusb::{Context, Device};
+
 use crate::drivers::{DeviceDescription, GUsbDriver};
-use crate::usb_ext::DetachedHandle;
 use crate::{
     Brightness, Command, CommandError, CommandResult, DeviceType, Direction, Dpi, GDevice,
-    GDeviceDriver, GDeviceModel, GDeviceModelRef, GModelId, RgbColor, Speed,
+    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed,
 };
-use quick_error::ResultExt;
-use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
-use std::fmt;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::time::Duration;
 
+#[allow(unused)]
 const DEFAULT_DIRECTION: Direction = Direction::RightToLeft;
 
 const DEVICE: DeviceDescription = DeviceDescription {
@@ -186,6 +184,7 @@ impl DeviceCommand {
         ])
     }
 
+    #[allow(unused)]
     pub fn for_blend(speed: Speed, brightness: Brightness) -> Self {
         Self::new(&[
             0x11,
@@ -208,6 +207,7 @@ impl DeviceCommand {
         ])
     }
 
+    #[allow(unused)]
     pub fn for_triple(left: RgbColor, middle: RgbColor, right: RgbColor) -> Self {
         // TODO: Add command
         // After that call: VALUE=0x211 11ff127b00000000000000000000000000000000
