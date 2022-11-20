@@ -11,4 +11,11 @@ updates:
       interval: "weekly"
       day: "friday"
     commit-message:
+      prefix: "GitHub Action"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+    commit-message:
       prefix: "Cargo"
