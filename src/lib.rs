@@ -59,7 +59,7 @@ impl RgbColor {
     }
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Direction {
     LeftToRight = 1,
     RightToLeft = 6,
@@ -82,7 +82,7 @@ impl TryFrom<&str> for Direction {
 }
 
 /// speed of effect
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub struct Speed(u16);
 
 impl From<u16> for Speed {
@@ -93,7 +93,7 @@ impl From<u16> for Speed {
 }
 
 /// DPI
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub struct Dpi(u16);
 
 impl From<u16> for Dpi {
@@ -104,7 +104,7 @@ impl From<u16> for Dpi {
 }
 
 /// Brightness
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub struct Brightness(u8);
 
 impl Default for Brightness {
