@@ -22,8 +22,8 @@ pub struct G213Driver {
     model: GDeviceModelRef,
 }
 
-impl G213Driver {
-    pub fn new() -> Self {
+impl Default for G213Driver {
+    fn default() -> Self {
         Self {
             model: Rc::new(G213Model),
         }
@@ -137,7 +137,7 @@ impl DeviceCommand {
             color.green(),
             color.blue(),
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             0,
             brightness.0,
         ])
@@ -157,7 +157,7 @@ impl DeviceCommand {
             0,
             0,
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             brightness.0,
         ])
     }
@@ -176,7 +176,7 @@ impl DeviceCommand {
             0,
             0,
             0,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             direction as u8,
             brightness.0,
             (speed.0 >> 8) as u8,

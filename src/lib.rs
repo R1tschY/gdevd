@@ -43,14 +43,14 @@ impl RgbColor {
         self.2
     }
 
-    pub fn from_hex(rgb_hex: &str) -> std::result::Result<Self, FromHexError> {
+    pub fn from_hex(rgb_hex: &str) -> Result<Self, FromHexError> {
         let mut bytes = [0u8; 3];
         hex::decode_to_slice(rgb_hex, &mut bytes as &mut [u8])?;
         Ok(RgbColor(bytes[0], bytes[1], bytes[2]))
     }
 
     pub fn to_hex(&self) -> String {
-        hex::encode(&[self.0, self.1, self.2])
+        hex::encode([self.0, self.1, self.2])
     }
 
     #[inline]
@@ -228,8 +228,8 @@ impl GDeviceManager {
         Ok(Self {
             context,
             drivers: vec![
-                Box::new(G213Driver::new()),
-                Box::new(G203LightsyncDriver::new()),
+                Box::<G213Driver>::default(),
+                Box::<G203LightsyncDriver>::default(),
             ],
             devices: vec![],
             config,
@@ -261,9 +261,9 @@ impl GDeviceManager {
     }
 
     fn try_open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>> {
-        if let Some(driver) = self.find_driver_for_device(&device) {
+        if let Some(driver) = self.find_driver_for_device(device) {
             info!("Found device {}", driver.get_model().get_name());
-            driver.open_device(&device)
+            driver.open_device(device)
         } else {
             None
         }

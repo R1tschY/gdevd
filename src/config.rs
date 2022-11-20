@@ -26,7 +26,7 @@ impl Config {
         self.0
             .section(Some(model_name))
             .map(|props| self.parse_model_config(props, model))
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_default()
     }
 
     fn parse_model_config(&self, props: &Properties, model: &dyn GDeviceModel) -> Vec<Command> {

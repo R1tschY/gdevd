@@ -23,8 +23,8 @@ pub struct G203LightsyncDriver {
     model: GDeviceModelRef,
 }
 
-impl G203LightsyncDriver {
-    pub fn new() -> Self {
+impl Default for G203LightsyncDriver {
+    fn default() -> Self {
         Self {
             model: Rc::new(G203LightsyncModel),
         }
@@ -130,7 +130,7 @@ impl DeviceCommand {
             color.green(),
             color.blue(),
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             0,
             brightness.0,
             0,
@@ -154,7 +154,7 @@ impl DeviceCommand {
             0,
             0,
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             brightness.0,
             0,
             0,
@@ -176,7 +176,7 @@ impl DeviceCommand {
             0,
             0,
             0,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             direction as u8,
             brightness.0,
             (speed.0 >> 8) as u8,
@@ -199,7 +199,7 @@ impl DeviceCommand {
             0,
             0,
             0,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             (speed.0 >> 8) as u8,
             brightness.0,
             0,

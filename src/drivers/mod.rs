@@ -103,14 +103,14 @@ impl GUsbDriver {
             "manufacturer={:?} product={:?} device_version={:?} serial={}",
             self.handle
                 .read_manufacturer_string_ascii(&usb_device)
-                .unwrap_or(String::new()),
+                .unwrap_or_default(),
             self.handle
                 .read_product_string_ascii(&usb_device)
-                .unwrap_or(String::new()),
+                .unwrap_or_default(),
             usb_device.device_version(),
             self.handle
                 .read_serial_number_string_ascii(&usb_device)
-                .unwrap_or(String::new()),
+                .unwrap_or_default(),
         )
     }
 }
