@@ -16,8 +16,8 @@ const DEFAULT_DIRECTION: Direction = Direction::RightToLeft;
 const DEVICE: DeviceDescription = DeviceDescription {
     product_id: 0xc092,
     min_speed: Speed(1000),
-    default_speed: Speed(10000), // ???
-    max_speed: Speed(20000),
+    default_speed: Speed(10000), // 11000 ???
+    max_speed: Speed(20000), // ???
     min_dpi: Dpi(50),
 };
 
