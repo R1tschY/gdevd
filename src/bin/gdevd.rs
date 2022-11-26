@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dbus::blocking::LocalConnection;
+use dbus::MethodErr;
 use dbus_tree;
 use dbus_tree::{Factory, Interface, MTFn, MethodErr};
 
