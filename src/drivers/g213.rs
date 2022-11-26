@@ -140,7 +140,7 @@ impl DeviceCommand {
             color.green(),
             color.blue(),
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             0,
             brightness.0,
         ])
@@ -160,7 +160,7 @@ impl DeviceCommand {
             0,
             0,
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             brightness.0,
         ])
     }
