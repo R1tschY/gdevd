@@ -3,10 +3,11 @@
 *Systemd daemon to control background LEDs of Logitech gaming devices.*
 
 ## Installation
+Clone the repository. Open a terminal in the cloned directory.
 
 Install Rust toolchain: 
    
-   sh ./rustup-init.sh
+    sh ./rustup-init.sh
 
 Install gdevd:
 
