@@ -1,6 +1,6 @@
 [package]
 name = "gdev"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["R1tschY <r1tschy@posteo.de>"]
 edition = "2018"
 
