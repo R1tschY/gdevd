@@ -127,7 +127,7 @@ impl DeviceCommand {
         Self::new(&[0x11, 0xff, 0x0c, 0x0d])
     }
 
-    pub fn for_breathe(color: RgbColor, speed: Speed) -> Self {
+    pub fn for_breathe(color: RgbColor, speed: Speed, brightness: Brightness) -> Self {
         Self::new(&[
             0x11,
             0xff,
@@ -140,10 +140,12 @@ impl DeviceCommand {
             color.blue(),
             (speed.0 >> 8) as u8,
             (speed.0 >> 0) as u8,
+            0,
+            brightness.0,
         ])
     }
 
-    pub fn for_cycle(speed: Speed) -> Self {
+    pub fn for_cycle(speed: Speed, brightness: Brightness) -> Self {
         Self::new(&[
             0x11,
             0xff,
@@ -158,11 +160,11 @@ impl DeviceCommand {
             0,
             (speed.0 >> 8) as u8,
             (speed.0 >> 0) as u8,
-            0x64,
+            brightness.0,
         ])
     }
 
-    pub fn for_wave(direction: Direction, speed: Speed) -> Self {
+    pub fn for_wave(direction: Direction, speed: Speed, brightness: Brightness) -> Self {
         Self::new(&[
             0x11,
             0xff,
@@ -178,7 +180,7 @@ impl DeviceCommand {
             0,
             (speed.0 >> 0) as u8,
             direction as u8,
-            0x64,
+            brightness.0,
             (speed.0 >> 8) as u8,
         ])
     }
@@ -199,17 +201,6 @@ impl DeviceCommand {
         let mut bytes = [0; 20];
         bytes[0..b.len()].copy_from_slice(b);
         Self { bytes }
-    }
-}
-
-fn brightness_unsupported(brightness: Option<Brightness>) -> CommandResult<()> {
-    if brightness.is_some() && brightness != Some(Brightness::default()) {
-        Err(CommandError::InvalidArgument(
-            "brightness",
-            "brightness is not supported by G213".to_string(),
-        ))
-    } else {
-        Ok(())
     }
 }
 
@@ -242,20 +233,26 @@ impl GDevice for G213Device {
                     interface.send_data(&DeviceCommand::for_color(rgb).bytes)
                 }
             }
-            Breathe(rgb, speed, brightness) => {
-                brightness_unsupported(brightness)?;
-                interface
-                    .send_data(&DeviceCommand::for_breathe(rgb, DEVICE.get_speed(speed)?).bytes)
-            }
-            Cycle(speed, brightness) => {
-                brightness_unsupported(brightness)?;
-                interface.send_data(&DeviceCommand::for_cycle(DEVICE.get_speed(speed)?).bytes)
-            }
-            Wave(direction, speed, brightness) => {
-                brightness_unsupported(brightness)?;
-                interface
-                    .send_data(&DeviceCommand::for_wave(direction, DEVICE.get_speed(speed)?).bytes)
-            }
+            Breathe(rgb, speed, brightness) => interface.send_data(
+                &DeviceCommand::for_breathe(
+                    rgb,
+                    DEVICE.get_speed(speed)?,
+                    brightness.unwrap_or_default(),
+                )
+                .bytes,
+            ),
+            Cycle(speed, brightness) => interface.send_data(
+                &DeviceCommand::for_cycle(DEVICE.get_speed(speed)?, brightness.unwrap_or_default())
+                    .bytes,
+            ),
+            Wave(direction, speed, brightness) => interface.send_data(
+                &DeviceCommand::for_wave(
+                    direction,
+                    DEVICE.get_speed(speed)?,
+                    brightness.unwrap_or_default(),
+                )
+                .bytes,
+            ),
             StartEffect(state) => {
                 interface.send_data(&DeviceCommand::for_start_effect(state).bytes)
             }
