@@ -4,7 +4,9 @@
 
 ## Installation
 
-Install Rust toolchain: https://www.rust-lang.org/tools/install
+Install Rust toolchain: 
+   
+   sh ./rustup-init.sh
 
 Install gdevd:
 
