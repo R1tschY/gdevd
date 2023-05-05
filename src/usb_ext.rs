@@ -1,5 +1,6 @@
-use rusb::{DeviceHandle, Result, UsbContext};
 use std::ops::{Deref, DerefMut};
+
+use rusb::{DeviceHandle, Result, UsbContext};
 
 /// Handle with detached kernel and claimed interface
 pub struct DetachedHandle<'t, T: UsbContext> {
@@ -28,13 +29,13 @@ impl<'t, T: UsbContext> Deref for DetachedHandle<'t, T> {
     type Target = DeviceHandle<T>;
 
     fn deref(&self) -> &Self::Target {
-        &self.handle
+        self.handle
     }
 }
 
 impl<'t, T: UsbContext> DerefMut for DetachedHandle<'t, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.handle
+        self.handle
     }
 }
 

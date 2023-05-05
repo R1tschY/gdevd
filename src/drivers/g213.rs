@@ -1,15 +1,12 @@
+use std::rc::Rc;
+
+use rusb::{Context, Device};
+
 use crate::drivers::{DeviceDescription, GUsbDriver};
-use crate::usb_ext::DetachedHandle;
 use crate::{
     Brightness, Command, CommandError, CommandResult, DeviceType, Direction, Dpi, GDevice,
-    GDeviceDriver, GDeviceModel, GDeviceModelRef, GModelId, RgbColor, Speed,
+    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed,
 };
-use quick_error::ResultExt;
-use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
-use std::fmt;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::time::Duration;
 
 const DEFAULT_RGB: RgbColor = RgbColor(0x00, 0xA9, 0xE0);
 
@@ -25,8 +22,8 @@ pub struct G213Driver {
     model: GDeviceModelRef,
 }
 
-impl G213Driver {
-    pub fn new() -> Self {
+impl Default for G213Driver {
+    fn default() -> Self {
         Self {
             model: Rc::new(G213Model),
         }
@@ -179,7 +176,7 @@ impl DeviceCommand {
             0,
             0,
             0,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             direction as u8,
             brightness.0,
             (speed.0 >> 8) as u8,

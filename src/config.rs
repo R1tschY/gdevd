@@ -1,6 +1,8 @@
-use crate::{Brightness, Command, CommandError, Direction, GDeviceModel, RgbColor, Speed};
-use ini::{Ini, Properties, SectionSetter};
 use std::convert::TryInto;
+
+use ini::{Ini, Properties, SectionSetter};
+
+use crate::{Brightness, Command, Direction, GDeviceModel, RgbColor, Speed};
 
 const CONFIG_PATH: &str = "/etc/gdevd.conf";
 
@@ -24,7 +26,7 @@ impl Config {
         self.0
             .section(Some(model_name))
             .map(|props| self.parse_model_config(props, model))
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_default()
     }
 
     fn parse_model_config(&self, props: &Properties, model: &dyn GDeviceModel) -> Vec<Command> {

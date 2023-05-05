@@ -1,16 +1,14 @@
+use std::rc::Rc;
+
+use rusb::{Context, Device};
+
 use crate::drivers::{DeviceDescription, GUsbDriver};
-use crate::usb_ext::DetachedHandle;
 use crate::{
     Brightness, Command, CommandError, CommandResult, DeviceType, Direction, Dpi, GDevice,
-    GDeviceDriver, GDeviceModel, GDeviceModelRef, GModelId, RgbColor, Speed,
+    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed,
 };
-use quick_error::ResultExt;
-use rusb::{Context, Device, DeviceHandle, DeviceList, UsbContext};
-use std::fmt;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::time::Duration;
 
+#[allow(unused)]
 const DEFAULT_DIRECTION: Direction = Direction::RightToLeft;
 
 const DEVICE: DeviceDescription = DeviceDescription {
@@ -25,8 +23,8 @@ pub struct G203LightsyncDriver {
     model: GDeviceModelRef,
 }
 
-impl G203LightsyncDriver {
-    pub fn new() -> Self {
+impl Default for G203LightsyncDriver {
+    fn default() -> Self {
         Self {
             model: Rc::new(G203LightsyncModel),
         }
@@ -132,7 +130,7 @@ impl DeviceCommand {
             color.green(),
             color.blue(),
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             0,
             brightness.0,
             0,
@@ -156,7 +154,7 @@ impl DeviceCommand {
             0,
             0,
             (speed.0 >> 8) as u8,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             brightness.0,
             0,
             0,
@@ -178,7 +176,7 @@ impl DeviceCommand {
             0,
             0,
             0,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             direction as u8,
             brightness.0,
             (speed.0 >> 8) as u8,
@@ -186,6 +184,7 @@ impl DeviceCommand {
         ])
     }
 
+    #[allow(unused)]
     pub fn for_blend(speed: Speed, brightness: Brightness) -> Self {
         Self::new(&[
             0x11,
@@ -200,7 +199,7 @@ impl DeviceCommand {
             0,
             0,
             0,
-            (speed.0 >> 0) as u8,
+            speed.0 as u8,
             (speed.0 >> 8) as u8,
             brightness.0,
             0,
@@ -208,7 +207,10 @@ impl DeviceCommand {
         ])
     }
 
+    #[allow(unused)]
     pub fn for_triple(left: RgbColor, middle: RgbColor, right: RgbColor) -> Self {
+        // TODO: Add command
+        // After that call: VALUE=0x211 11ff127b00000000000000000000000000000000
         Self::new(&[
             0x11,
             0xff,

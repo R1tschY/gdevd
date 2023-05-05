@@ -2,6 +2,8 @@ extern crate dbus;
 #[macro_use]
 extern crate log;
 
+use std::cell::RefCell;
+use std::convert::{TryFrom, TryInto};
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,9 +13,7 @@ use dbus::MethodErr;
 use dbus_tree::{Factory, Interface, MTFn};
 
 use gdev::Command::{Breathe, ColorSector, Cycle, Wave};
-use gdev::{Brightness, CommandError, GDeviceManager, RgbColor};
-use std::cell::RefCell;
-use std::convert::{TryFrom, TryInto};
+use gdev::{Brightness, GDeviceManager, RgbColor};
 
 #[derive(Copy, Clone, Default, Debug)]
 struct TreeData;
@@ -42,7 +42,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
     f.interface("de.richardliebscher.gdevd.GDeviceManager", ())
         .add_m(
             f.method("list_drivers", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data().borrow_mut();
 
                 let drivers = manager.list_drivers();
                 let drivers_info: Vec<(&str,)> = drivers
@@ -55,7 +55,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         )
         .add_m(
             f.method("list", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data().borrow_mut();
 
                 let devices = manager.list();
                 let devices_info: Vec<(&str, String)> = devices
@@ -165,14 +165,14 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    simple_logger::init_by_env();
+    simple_logger::init_with_env()?;
 
-    let mut c = LocalConnection::new_system()?;
+    let c = LocalConnection::new_system()?;
     c.request_name("de.richardliebscher.gdevd", false, true, true)?;
 
     let device_manager_if = create_interface();
     let mut device_manager = GDeviceManager::try_new()?;
-    device_manager.load_devices();
+    device_manager.load_devices()?;
 
     let f = Factory::new_fn::<TreeData>();
     let tree = f.tree(()).add(

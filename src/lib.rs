@@ -1,21 +1,21 @@
-use rusb::{Context, Device, DeviceList, UsbContext};
-use std::fmt;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate quick_error;
 
-use crate::config::Config;
-use crate::drivers::g203_lightsync::G203LightsyncDriver;
-use crate::drivers::g213::{G213Driver, G213Model};
-use hex::FromHexError;
-use quick_error::ResultExt;
-use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::Arc;
+
+use hex::FromHexError;
+use quick_error::ResultExt;
+use rusb::{Context, Device, UsbContext};
+
+use crate::config::Config;
+use crate::drivers::g203_lightsync::G203LightsyncDriver;
+use crate::drivers::g213::G213Driver;
 
 pub mod config;
 pub mod drivers;
@@ -43,14 +43,14 @@ impl RgbColor {
         self.2
     }
 
-    pub fn from_hex(rgb_hex: &str) -> std::result::Result<Self, FromHexError> {
+    pub fn from_hex(rgb_hex: &str) -> Result<Self, FromHexError> {
         let mut bytes = [0u8; 3];
         hex::decode_to_slice(rgb_hex, &mut bytes as &mut [u8])?;
         Ok(RgbColor(bytes[0], bytes[1], bytes[2]))
     }
 
     pub fn to_hex(&self) -> String {
-        hex::encode(&[self.0, self.1, self.2])
+        hex::encode([self.0, self.1, self.2])
     }
 
     #[inline]
@@ -59,7 +59,7 @@ impl RgbColor {
     }
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Direction {
     LeftToRight = 1,
     RightToLeft = 6,
@@ -82,7 +82,7 @@ impl TryFrom<&str> for Direction {
 }
 
 /// speed of effect
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub struct Speed(u16);
 
 impl From<u16> for Speed {
@@ -93,7 +93,7 @@ impl From<u16> for Speed {
 }
 
 /// DPI
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub struct Dpi(u16);
 
 impl From<u16> for Dpi {
@@ -104,7 +104,7 @@ impl From<u16> for Dpi {
 }
 
 /// Brightness
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub struct Brightness(u8);
 
 impl Default for Brightness {
@@ -228,8 +228,8 @@ impl GDeviceManager {
         Ok(Self {
             context,
             drivers: vec![
-                Box::new(G213Driver::new()),
-                Box::new(G203LightsyncDriver::new()),
+                Box::<G213Driver>::default(),
+                Box::<G203LightsyncDriver>::default(),
             ],
             devices: vec![],
             config,
@@ -261,9 +261,9 @@ impl GDeviceManager {
     }
 
     fn try_open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>> {
-        if let Some(driver) = self.find_driver_for_device(&device) {
+        if let Some(driver) = self.find_driver_for_device(device) {
             info!("Found device {}", driver.get_model().get_name());
-            driver.open_device(&device)
+            driver.open_device(device)
         } else {
             None
         }
