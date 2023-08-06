@@ -6,14 +6,12 @@ use std::process::Command;
 use std::time::Duration;
 use std::{fmt, fs, io};
 
+use clap::Parser;
 use dbus::blocking::Connection;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
-#[structopt(
-    about = "Change background lights of Logitech gaming devices",
-    rename_all = "kebab"
-)]
+/// Change background lights of Logitech gaming devices
+#[derive(Parser)]
+#[command(rename_all = "kebab")]
 enum Cli {
     /// Set color for keyboard sector
     Color {
@@ -60,13 +58,13 @@ enum Cli {
     /// Install daemon as systemd service
     InstallService {
         /// Prefix for service installation
-        #[structopt(long, parse(from_os_str), default_value = "/usr/local")]
+        #[structopt(long, default_value = "/usr/local")]
         prefix: PathBuf,
     },
     /// Uninstall daemon as systemd service
     UninstallService {
         /// Prefix of service installation
-        #[structopt(long, parse(from_os_str), default_value = "/usr/local")]
+        #[structopt(long, default_value = "/usr/local")]
         prefix: PathBuf,
     },
 }
@@ -91,7 +89,7 @@ fn _main() -> Result<(), Box<dyn Error>> {
         Duration::from_millis(5000),
     );
 
-    match Cli::from_args() {
+    match Cli::parse() {
         Cli::Color {
             color,
             sector: Some(sector),
