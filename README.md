@@ -4,15 +4,9 @@
 
 ## Installation
 
-Install Rust toolchain: https://www.rust-lang.org/tools/install
+Install as Systemd service:
 
-Install gdevd:
-
-    make && sudo make install
-
-You can later uninstall with:
-    
-    sudo make uninstall
+    cargo install gdevd && sudo gdevctl install-service
 
 ## Usage
 

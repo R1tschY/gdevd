@@ -1,15 +1,17 @@
 [Unit]
-Description=Logitech Gaming Devices Refresh
-Requires=gdevd.service
+Description=Logitech Gaming Devices Daemon
 After=suspend.target
 After=hibernate.target
 After=hybrid-sleep.target
 
 [Service]
-Type=oneshot
-ExecStart=/usr/local/bin/gdevctl refresh
+Type=dbus
+BusName=de.richardliebscher.gdevd
+Environment="RUST_LOG=INFO"
+ExecStart=$$PREFIX$$/bin/gdevd
 
 [Install]
+WantedBy=multi-user.target
 WantedBy=suspend.target
 WantedBy=hibernate.target
 WantedBy=hybrid-sleep.target
