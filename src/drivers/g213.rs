@@ -1,11 +1,12 @@
-use std::rc::Rc;
+use std::fmt;
+use std::sync::Arc;
 
 use rusb::{Context, Device};
 
 use crate::drivers::{DeviceDescription, GUsbDriver};
 use crate::{
     Brightness, Command, CommandError, CommandResult, DeviceType, Direction, Dpi, GDevice,
-    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed,
+    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed, UsbDevice,
 };
 
 const DEFAULT_RGB: RgbColor = RgbColor(0x00, 0xA9, 0xE0);
@@ -25,7 +26,7 @@ pub struct G213Driver {
 impl Default for G213Driver {
     fn default() -> Self {
         Self {
-            model: Rc::new(G213Model),
+            model: Arc::new(G213Model),
         }
     }
 }
@@ -202,9 +203,23 @@ impl DeviceCommand {
     }
 }
 
+impl fmt::Display for G213Device {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "{} [{}]",
+            self.get_model().get_name(),
+            self.serial_number()
+        ))
+    }
+}
+
 impl GDevice for G213Device {
-    fn get_debug_info(&self) -> String {
-        self.driver.debug_info()
+    fn dev(&self) -> &UsbDevice {
+        self.driver.dev()
+    }
+
+    fn serial_number(&self) -> &str {
+        self.driver.serial_number()
     }
 
     fn get_model(&self) -> GDeviceModelRef {

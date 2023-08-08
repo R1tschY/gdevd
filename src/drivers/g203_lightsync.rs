@@ -1,11 +1,12 @@
-use std::rc::Rc;
+use std::fmt;
+use std::sync::Arc;
 
 use rusb::{Context, Device};
 
 use crate::drivers::{DeviceDescription, GUsbDriver};
 use crate::{
     Brightness, Command, CommandError, CommandResult, DeviceType, Direction, Dpi, GDevice,
-    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed,
+    GDeviceDriver, GDeviceModel, GDeviceModelRef, RgbColor, Speed, UsbDevice,
 };
 
 #[allow(unused)]
@@ -26,7 +27,7 @@ pub struct G203LightsyncDriver {
 impl Default for G203LightsyncDriver {
     fn default() -> Self {
         Self {
-            model: Rc::new(G203LightsyncModel),
+            model: Arc::new(G203LightsyncModel),
         }
     }
 }
@@ -265,9 +266,23 @@ fn sector_unsupported(sector: Option<u8>) -> CommandResult<()> {
     }
 }
 
+impl fmt::Display for G203LightsyncDevice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "{} [{}]",
+            self.get_model().get_name(),
+            self.serial_number()
+        ))
+    }
+}
+
 impl GDevice for G203LightsyncDevice {
-    fn get_debug_info(&self) -> String {
-        self.driver.debug_info()
+    fn dev(&self) -> &UsbDevice {
+        self.driver.dev()
+    }
+
+    fn serial_number(&self) -> &str {
+        self.driver.serial_number()
     }
 
     fn get_model(&self) -> GDeviceModelRef {

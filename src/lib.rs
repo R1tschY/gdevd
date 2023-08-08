@@ -5,13 +5,14 @@ extern crate quick_error;
 
 use std::convert::TryFrom;
 use std::fmt;
+use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 
 use hex::FromHexError;
 use quick_error::ResultExt;
-use rusb::{Context, Device, UsbContext};
+use rusb::{Context, Device, Hotplug, HotplugBuilder, Registration, UsbContext};
 
 use crate::config::Config;
 use crate::drivers::g203_lightsync::G203LightsyncDriver;
@@ -141,6 +142,14 @@ pub enum Command {
     Dpi(Dpi),
 }
 
+pub type UsbDevice = Device<Context>;
+
+pub enum GDeviceManagerEvent {
+    DevicePluggedIn(UsbDevice),
+    DevicePluggedOut(UsbDevice),
+    Shutdown,
+}
+
 #[derive(Debug)]
 pub enum DeviceType {
     Keyboard,
@@ -149,15 +158,18 @@ pub enum DeviceType {
 
 pub struct GModelId(String);
 
-pub trait GDeviceDriver {
+/// Driver for Logitech G devices
+pub trait GDeviceDriver: Send {
     fn get_model(&self) -> GDeviceModelRef;
-    fn open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>>;
+    fn open_device(&self, device: &UsbDevice) -> Option<Box<dyn GDevice>>;
 }
 
 pub type GDeviceDriverRef = Box<dyn GDeviceDriver>;
 
-/// model series
-pub trait GDeviceModel {
+/// Logitech G device model series
+///
+/// Implementation is provided by a driver.
+pub trait GDeviceModel: Send + Sync {
     fn get_sectors(&self) -> u8;
 
     fn get_default_color(&self) -> RgbColor;
@@ -169,16 +181,28 @@ pub trait GDeviceModel {
     fn usb_product_id(&self) -> u16;
 }
 
-pub type GDeviceModelRef = Rc<dyn GDeviceModel>;
+pub type GDeviceModelRef = Arc<dyn GDeviceModel>;
 
-/// a device
-pub trait GDevice {
-    fn get_debug_info(&self) -> String;
+/// Logitech G device
+///
+/// Implementation is provided by a driver.
+pub trait GDevice: Display + Send {
+    /// Return USB device reference.
+    fn dev(&self) -> &UsbDevice;
+    /// Return serial number
+    fn serial_number(&self) -> &str;
+    /// Return device model information
     fn get_model(&self) -> GDeviceModelRef;
+    /// Send command to device
     fn send_command(&mut self, cmd: Command) -> CommandResult<()>;
 }
 
 pub type GDeviceRef = Box<dyn GDevice>;
+
+pub struct GDeviceInfo {
+    pub model: &'static str,
+    pub serial: String,
+}
 
 quick_error! {
     #[derive(Debug)]
@@ -213,27 +237,49 @@ impl Hash for Box<dyn GDeviceModel> {
     }
 }
 
-pub struct GDeviceManager {
-    context: Context,
+struct GDeviceManagerState {
+    pub context: Context,
+    #[allow(dead_code)]
+    hotplug: Registration<Context>,
     config: Config,
-    drivers: Vec<GDeviceDriverRef>,
     devices: Vec<GDeviceRef>,
+    drivers: Vec<GDeviceDriverRef>,
 }
 
-impl GDeviceManager {
-    /// Try to create device manager with USB connection
-    pub fn try_new() -> CommandResult<Self> {
+impl GDeviceManagerState {
+    pub fn new(tx: mpsc::SyncSender<GDeviceManagerEvent>) -> CommandResult<Self> {
         let context = Context::new().context("creating USB context")?;
         let config = Config::load();
         Ok(Self {
-            context,
+            devices: vec![],
+            config,
             drivers: vec![
                 Box::<G213Driver>::default(),
                 Box::<G203LightsyncDriver>::default(),
             ],
-            devices: vec![],
-            config,
+            hotplug: HotplugBuilder::new()
+                .vendor_id(LOGITECH_USB_VENDOR_ID)
+                .register(&context, Box::new(HotPlugHandler { channel: tx }))
+                .context("registering hotplug callback")?,
+            context,
         })
+    }
+
+    pub fn get_devices(&mut self) -> Vec<GDeviceInfo> {
+        self.devices
+            .iter()
+            .map(|dev| GDeviceInfo {
+                model: dev.get_model().get_name(),
+                serial: dev.serial_number().to_string(),
+            })
+            .collect()
+    }
+
+    pub fn get_drivers(&mut self) -> Vec<&'static str> {
+        self.drivers
+            .iter()
+            .map(|drv| drv.get_model().get_name())
+            .collect()
     }
 
     pub fn load_devices(&mut self) -> CommandResult<()> {
@@ -260,7 +306,7 @@ impl GDeviceManager {
         }
     }
 
-    fn try_open_device(&self, device: &Device<Context>) -> Option<Box<dyn GDevice>> {
+    fn try_open_device(&self, device: &UsbDevice) -> Option<Box<dyn GDevice>> {
         if let Some(driver) = self.find_driver_for_device(device) {
             info!("Found device {}", driver.get_model().get_name());
             driver.open_device(device)
@@ -269,18 +315,6 @@ impl GDeviceManager {
         }
     }
 
-    /// Send command to all devices
-    pub fn list(&self) -> &[GDeviceRef] {
-        info!("List {} device(s)", self.devices.len());
-        &self.devices
-    }
-
-    /// Send command to all devices
-    pub fn list_drivers(&self) -> &[GDeviceDriverRef] {
-        &self.drivers
-    }
-
-    /// Send command to all devices
     pub fn send_command(&mut self, cmd: Command) {
         for device in &mut self.devices {
             if let Err(err) = device.send_command(cmd.clone()) {
@@ -291,30 +325,143 @@ impl GDeviceManager {
         }
     }
 
-    /// Send current config to device
-    pub fn apply_config(&mut self) {
+    fn apply_config(&mut self) {
         for device in &mut self.devices {
-            info!("Setting config for {}", device.get_model().get_name());
-            for command in self.config.commands_for(&*device.get_model()) {
-                if let Err(err) = device.send_command(command.clone()) {
-                    error!("Sending command failed for device: {:?}", err);
-                }
+            Self::apply_device_config(device, &self.config);
+        }
+    }
+
+    fn apply_device_config(device: &mut GDeviceRef, config: &Config) {
+        info!("Setting config for {}", device.get_model().get_name());
+        for command in config.commands_for(&*device.get_model()) {
+            if let Err(err) = device.send_command(command.clone()) {
+                error!("Unable to send command to device {device}: {:?}", err);
             }
         }
     }
 
-    /// Refresh config from filesystem and send config
     pub fn refresh(&mut self) {
         info!("Refreshing");
         self.config = Config::load();
         self.apply_config();
     }
+
+    pub fn on_new_usb_device(&mut self, dev: UsbDevice) {
+        if let Some(mut gdev) = self.try_open_device(&dev) {
+            if let Some(_) = self.devices.iter().find(|existing| existing.dev() == &dev) {
+                warn!("Plugged in device {} already exists", gdev)
+            } else {
+                info!("Device plugged in: {}", gdev);
+                Self::apply_device_config(&mut gdev, &self.config);
+                self.devices.push(gdev);
+            }
+        }
+    }
+
+    pub fn on_lost_usb_device(&mut self, dev: UsbDevice) {
+        self.devices.retain(|existing| {
+            if existing.dev() == &dev {
+                info!("Device unplugged: {}", existing);
+                false
+            } else {
+                true
+            }
+        });
+    }
+}
+
+pub struct GDeviceManager {
+    state: Mutex<GDeviceManagerState>,
+    rx: Mutex<mpsc::Receiver<GDeviceManagerEvent>>,
+    tx: mpsc::SyncSender<GDeviceManagerEvent>,
+}
+
+impl GDeviceManager {
+    /// Try to create device manager with USB connection
+    pub fn try_new() -> CommandResult<Self> {
+        let (tx, rx) = mpsc::sync_channel(1024);
+        let state = GDeviceManagerState::new(tx.clone())?;
+        Ok(Self {
+            tx,
+            rx: Mutex::new(rx),
+            state: Mutex::new(state),
+        })
+    }
+
+    pub fn context(&self) -> Context {
+        self.state().context.clone()
+    }
+
+    pub fn channel(&self) -> &mpsc::SyncSender<GDeviceManagerEvent> {
+        &self.tx
+    }
+
+    pub fn load_devices(&self) -> CommandResult<()> {
+        self.state().load_devices()
+    }
+
+    /// Send command to all devices
+    pub fn list(&self) -> Vec<GDeviceInfo> {
+        self.state().get_devices()
+    }
+
+    /// Send command to all devices
+    pub fn list_drivers(&self) -> Vec<&'static str> {
+        self.state().get_drivers()
+    }
+
+    /// Send command to all devices
+    pub fn send_command(&self, cmd: Command) {
+        self.state().send_command(cmd)
+    }
+
+    /// Send current config to device
+    pub fn apply_config(&mut self) {
+        self.state().apply_config()
+    }
+
+    /// Refresh config from filesystem and send config
+    pub fn refresh(&self) {
+        self.state().refresh()
+    }
+
+    pub fn run(&self) {
+        while let Ok(msg) = self.rx.lock().unwrap().recv() {
+            match msg {
+                GDeviceManagerEvent::DevicePluggedIn(dev) => self.state().on_new_usb_device(dev),
+                GDeviceManagerEvent::DevicePluggedOut(dev) => self.state().on_lost_usb_device(dev),
+                GDeviceManagerEvent::Shutdown => break,
+            }
+        }
+    }
+
+    fn state(&self) -> MutexGuard<'_, GDeviceManagerState> {
+        self.state.lock().unwrap()
+    }
 }
 
 impl fmt::Debug for GDeviceManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("GDeviceManager")
-            .field(&self.devices.len())
-            .finish()
+        f.write_str("GDeviceManager")
+    }
+}
+
+struct HotPlugHandler {
+    channel: mpsc::SyncSender<GDeviceManagerEvent>,
+}
+
+impl HotPlugHandler {
+    fn send(&self, cmd: GDeviceManagerEvent) {
+        self.channel.send(cmd).expect("channel should be alive");
+    }
+}
+
+impl Hotplug<Context> for HotPlugHandler {
+    fn device_arrived(&mut self, device: UsbDevice) {
+        self.send(GDeviceManagerEvent::DevicePluggedIn(device));
+    }
+
+    fn device_left(&mut self, device: UsbDevice) {
+        self.send(GDeviceManagerEvent::DevicePluggedOut(device));
     }
 }

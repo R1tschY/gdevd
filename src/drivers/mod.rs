@@ -4,7 +4,7 @@ use quick_error::ResultExt;
 use rusb::{Context, Device, DeviceHandle};
 
 use crate::usb_ext::DetachedHandle;
-use crate::{CommandError, CommandResult, Dpi, Speed};
+use crate::{CommandError, CommandResult, Dpi, Speed, UsbDevice};
 
 pub mod g203_lightsync;
 pub mod g213;
@@ -59,6 +59,8 @@ impl DeviceDescription {
 }
 
 struct GUsbDriver {
+    dev: UsbDevice,
+    serial_number: String,
     handle: DeviceHandle<Context>,
     description: &'static DeviceDescription,
 }
@@ -82,9 +84,17 @@ impl GUsbDriver {
         device: &Device<Context>,
     ) -> CommandResult<Self> {
         debug!("Opening device");
+        let handle = device.open().context("opening USB device")?;
+        let descriptor = device
+            .device_descriptor()
+            .context("reading device descriptor")?;
         Ok(Self {
             description,
-            handle: device.open().context("opening USB device")?,
+            dev: device.clone(),
+            serial_number: handle
+                .read_serial_number_string_ascii(&descriptor)
+                .context("reading serial number")?,
+            handle,
         })
     }
 
@@ -97,21 +107,12 @@ impl GUsbDriver {
         })
     }
 
-    fn debug_info(&self) -> String {
-        let usb_device = self.handle.device().device_descriptor().unwrap();
-        format!(
-            "manufacturer={:?} product={:?} device_version={:?} serial={}",
-            self.handle
-                .read_manufacturer_string_ascii(&usb_device)
-                .unwrap_or_default(),
-            self.handle
-                .read_product_string_ascii(&usb_device)
-                .unwrap_or_default(),
-            usb_device.device_version(),
-            self.handle
-                .read_serial_number_string_ascii(&usb_device)
-                .unwrap_or_default(),
-        )
+    fn serial_number(&self) -> &str {
+        &self.serial_number
+    }
+
+    fn dev(&self) -> &UsbDevice {
+        &self.dev
     }
 }
 

@@ -1,16 +1,16 @@
-extern crate dbus;
 #[macro_use]
 extern crate log;
 
-use std::cell::RefCell;
 use std::convert::{TryFrom, TryInto};
 use std::error::Error;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use dbus::blocking::LocalConnection;
 use dbus::MethodErr;
 use dbus_tree::{Factory, Interface, MTFn};
+use rusb::UsbContext;
 
 use gdev::Command::{Breathe, ColorSector, Cycle, Wave};
 use gdev::{Brightness, GDeviceManager, RgbColor};
@@ -20,7 +20,7 @@ struct TreeData;
 
 impl dbus_tree::DataType for TreeData {
     type Tree = ();
-    type ObjectPath = Arc<RefCell<GDeviceManager>>;
+    type ObjectPath = Arc<GDeviceManager>;
     type Property = ();
     type Interface = ();
     type Method = ();
@@ -42,25 +42,23 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
     f.interface("de.richardliebscher.gdevd.GDeviceManager", ())
         .add_m(
             f.method("list_drivers", (), move |m| {
-                let manager = m.path.get_data().borrow_mut();
-
-                let drivers = manager.list_drivers();
-                let drivers_info: Vec<(&str,)> = drivers
+                let manager = m.path.get_data();
+                let drivers: Vec<(&str,)> = manager
+                    .list_drivers()
                     .iter()
-                    .map(|driver| (driver.get_model().get_name(),))
+                    .map(|driver| (*driver,))
                     .collect();
-                Ok(vec![m.msg.method_return().append1(drivers_info)])
+                Ok(vec![m.msg.method_return().append1(drivers)])
             })
             .outarg::<&[(&str,)], _>("drivers"),
         )
         .add_m(
             f.method("list", (), move |m| {
-                let manager = m.path.get_data().borrow_mut();
-
+                let manager = m.path.get_data();
                 let devices = manager.list();
-                let devices_info: Vec<(&str, String)> = devices
+                let devices_info: Vec<(&str, &str)> = devices
                     .iter()
-                    .map(|device| (device.get_model().get_name(), device.get_debug_info()))
+                    .map(|dev| (dev.model, &dev.serial as &str))
                     .collect();
                 Ok(vec![m.msg.method_return().append1(devices_info)])
             })
@@ -68,7 +66,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         )
         .add_m(
             f.method("color_sector", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data();
                 let (color, sector): (&str, u8) = m.msg.read2()?;
                 let rgb =
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
@@ -83,7 +81,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         )
         .add_m(
             f.method("color_sectors", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data();
                 let color: &str = m.msg.read1()?;
                 let rgb =
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
@@ -97,7 +95,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         )
         .add_m(
             f.method("breathe", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data();
                 let (color, speed, brightness): (&str, u16, u8) = m.msg.read3()?;
                 let rgb =
                     RgbColor::from_hex(color).map_err(|_err| MethodErr::invalid_arg("color"))?;
@@ -120,7 +118,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         )
         .add_m(
             f.method("cycle", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data();
                 let (speed, brightness): (u16, u8) = m.msg.read2()?;
 
                 info!("Set cycle mode: speed={} brightness={}", speed, brightness);
@@ -133,7 +131,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
         )
         .add_m(
             f.method("wave", (), move |m| {
-                let mut manager = m.path.get_data().borrow_mut();
+                let manager = m.path.get_data();
                 let (direction, speed, brightness): (&str, u16, u8) = m.msg.read3()?;
 
                 info!(
@@ -155,7 +153,7 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
             .inarg::<u8, _>("brightness"),
         )
         .add_m(f.method("refresh", (), move |m| {
-            let mut manager = m.path.get_data().borrow_mut();
+            let manager = m.path.get_data();
 
             info!("Refresh");
             manager.refresh();
@@ -167,16 +165,31 @@ fn create_interface() -> Interface<MTFn<TreeData>, TreeData> {
 fn main() -> Result<(), Box<dyn Error>> {
     simple_logger::init_with_env()?;
 
+    // Register DBus service
     let c = LocalConnection::new_system()?;
     c.request_name("de.richardliebscher.gdevd", false, true, true)?;
 
-    let device_manager_if = create_interface();
-    let mut device_manager = GDeviceManager::try_new()?;
+    // Start USB service
+    let device_manager = Arc::new(GDeviceManager::try_new()?);
     device_manager.load_devices()?;
 
+    let usb_context = device_manager.context().clone();
+    let _events_thd = thread::spawn(move || loop {
+        if let Err(err) = usb_context.handle_events(None) {
+            error!("libusb event handling aborted: {err}");
+            break;
+        }
+    });
+    let gdevmgr = device_manager.clone();
+    let _gdevmgr_thd = thread::spawn(move || {
+        gdevmgr.run();
+    });
+
+    // DBus
+    let device_manager_if = create_interface();
     let f = Factory::new_fn::<TreeData>();
     let tree = f.tree(()).add(
-        f.object_path("/devices", Arc::new(RefCell::new(device_manager)))
+        f.object_path("/devices", device_manager.clone())
             .introspectable()
             .add(device_manager_if),
     );
