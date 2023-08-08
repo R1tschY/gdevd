@@ -173,7 +173,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device_manager = Arc::new(GDeviceManager::try_new()?);
     device_manager.load_devices()?;
 
-    let usb_context = device_manager.context().clone();
+    let usb_context = device_manager.context();
     let _events_thd = thread::spawn(move || loop {
         if let Err(err) = usb_context.handle_events(None) {
             error!("libusb event handling aborted: {err}");
@@ -189,7 +189,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device_manager_if = create_interface();
     let f = Factory::new_fn::<TreeData>();
     let tree = f.tree(()).add(
-        f.object_path("/devices", device_manager.clone())
+        f.object_path("/devices", device_manager)
             .introspectable()
             .add(device_manager_if),
     );

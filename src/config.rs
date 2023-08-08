@@ -36,7 +36,7 @@ impl Config {
             Some("static") => (0..model.get_sectors())
                 .map(|i| {
                     Command::ColorSector(
-                        self.parse_color_prop(props, model, &format!("color-{}", i)),
+                        self.parse_color_prop(props, model, &format!("color-{i}")),
                         Some(i),
                     )
                 })
@@ -182,12 +182,12 @@ impl Config {
             Command::ColorSector(color, Some(sector)) => {
                 section
                     .set("type", "static")
-                    .set(format!("color-{}", sector), color.to_hex());
+                    .set(format!("color-{sector}"), color.to_hex());
             }
             Command::ColorSector(color, None) => {
                 let mut setter = section.set("type", "static-all");
                 for i in 0..model.get_sectors() {
-                    setter = setter.set(format!("color-{}", i), color.to_hex());
+                    setter = setter.set(format!("color-{i}"), color.to_hex());
                 }
             }
             Command::Breathe(color, speed, brightness) => {

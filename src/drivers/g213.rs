@@ -238,7 +238,7 @@ impl GDevice for G213Device {
                     if sector > 4 {
                         return Err(CommandError::InvalidArgument(
                             "sector",
-                            format!("{} > 4", sector),
+                            format!("{sector} > 4"),
                         ));
                     }
                     interface.send_data(&DeviceCommand::for_region_color(sector, rgb).bytes)

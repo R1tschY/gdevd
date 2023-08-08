@@ -348,7 +348,7 @@ impl GDeviceManagerState {
 
     pub fn on_new_usb_device(&mut self, dev: UsbDevice) {
         if let Some(mut gdev) = self.try_open_device(&dev) {
-            if let Some(_) = self.devices.iter().find(|existing| existing.dev() == &dev) {
+            if self.devices.iter().any(|existing| existing.dev() == &dev) {
                 warn!("Plugged in device {} already exists", gdev)
             } else {
                 info!("Device plugged in: {}", gdev);
