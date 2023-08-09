@@ -1,6 +1,6 @@
 [package]
 name = "gdevd"
-version = "0.2.0"
+version = "0.3.0-dev"
 authors = ["Richard Liebscher <r1tschy@posteo.de>"]
 license = "MIT OR Apache-2.0"
 description = "Daemon to control background LEDs of Logitech gaming devices"
