@@ -2,6 +2,19 @@
 
 *Systemd daemon to control background LEDs of Logitech gaming devices.*
 
+# Features
+
+* Set different pre-defined color animations or static colors
+* Reapply last set configuration after
+  * reboot
+  * suspend
+  * re-plugging (USB hotplugging)
+
+## Supported Devices
+
+* G213 Keyboard
+* G203 LIGHTSYNC Mouse
+
 ## Installation
 
 Install as Systemd service:
@@ -16,8 +29,3 @@ It installs two binaries:
 ## Usage
 
     gdevctl --help
-
-## Supported Devices
-
-* G213
-* G203 LIGHTSYNC
