@@ -15,8 +15,8 @@ use rusb::UsbContext;
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
 
-use gdev::Command::{Breathe, ColorSector, Cycle, Wave};
-use gdev::{Brightness, GDeviceManager, GDeviceManagerEvent, RgbColor};
+use gdevd::Command::{Breathe, ColorSector, Cycle, Wave};
+use gdevd::{Brightness, GDeviceManager, GDeviceManagerEvent, RgbColor};
 
 #[derive(Copy, Clone, Default, Debug)]
 struct TreeData;
