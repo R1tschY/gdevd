@@ -8,6 +8,11 @@ Install as Systemd service:
 
     cargo install gdevd && sudo gdevctl install-service
 
+It installs two binaries:
+
+* `gdevctl`: Command line utility to speak to the daemon via DBus
+* `gdevd`: Daemon that exposes DBus service on system bus (`de.richardliebscher.gdevd`)
+
 ## Usage
 
     gdevctl --help

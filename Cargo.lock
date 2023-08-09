@@ -198,7 +198,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gdev"
+name = "gdevd"
 version = "0.2.0"
 dependencies = [
  "clap",
