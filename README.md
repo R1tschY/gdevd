@@ -6,7 +6,7 @@
 
 Install as Systemd service:
 
-    cargo install gdevd && sudo gdevctl install-service
+    cargo install gdevd && sudo ~/.cargo/bin/gdevctl install-service
 
 It installs two binaries:
 
