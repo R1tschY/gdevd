@@ -2,6 +2,14 @@ name: Check + Test
 
 on: [push]
 
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,36 +19,51 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install OS dependencies
-        run: sudo apt-get install libdbus-1-dev pkg-config
+        run: sudo apt-get install libdbus-1-dev libusb-1.0-0-dev pkg-config
+        shell: bash
 
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update -c clippy -c rustfmt
+          rustup default stable
+        shell: bash
+
+      - name: "Print Rust toolchain version"
+        run: rustc --version --verbose
+        shell: bash
+
+      - name: "Get version"
+        id: version
+        run: |
+          REF="${{ github.ref }}"
+          if [[ "$REF" =~ ^refs/tags/v ]] ; then
+            version=${REF#refs/tags/v}
+            # checks
+            grep "version = \"$version\"" Cargo.toml > /dev/null
+          else
+            version=unreleased
+          fi
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Version: $version"
+        shell: bash
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
+        shell: bash
 
       - name: Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
-
-      - name: Check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --release
+        run: cargo clippy -- -D warnings
+        shell: bash
 
       - name: Test
-        uses: actions-rs/cargo@v1
+        run: cargo test --release
+        shell: bash
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          command: test
-          args: --release
+          name: Release ${{ steps.version.outputs.version }}
+          draft: true
