@@ -17,15 +17,25 @@
 
 ## Installation
 
-Install as Systemd service:
+Install prerequisites for building:
 
-    cargo install gdevd && sudo ~/.cargo/bin/gdevctl install-service
+```bash
+# For Debian-based distributions:
+sudo apt install libdbus-1-dev libusb-1.0-0-dev pkg-config
+```
+
+Build daemon and install Systemd service:
+```bash
+cargo install gdevd && sudo ~/.cargo/bin/gdevctl install-service
+```
 
 It installs two binaries:
 
-* `gdevctl`: Command line utility to speak to the daemon via DBus
-* `gdevd`: Daemon that exposes DBus service on system bus (`de.richardliebscher.gdevd`)
+* `/usr/local/bin/gdevctl`: Command line utility to speak to the daemon via DBus
+* `/usr/local/bin/gdevd`: Daemon that exposes DBus service on system bus (`de.richardliebscher.gdevd`)
 
 ## Usage
 
-    gdevctl --help
+```bash
+gdevctl --help
+```
