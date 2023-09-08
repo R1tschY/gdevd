@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install OS dependencies
         run: sudo apt-get install libdbus-1-dev libusb-1.0-0-dev pkg-config
