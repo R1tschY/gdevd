@@ -24,7 +24,7 @@ clap = { version = "4.3.19", features = ["derive"] }
 dbus = "0.9.7"
 dbus-tree = "0.9.2"
 log = "0.4.19"
-simple_logger = { version = "4.2.0", default_features = false }
+simple_logger = { version = "5.2.0", default_features = false }
 rust-ini = "0.19.0"
 quick-error = "2.0.1"
 signal-hook = { version = "0.3.17", features = ["iterator"] }
