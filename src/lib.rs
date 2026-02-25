@@ -156,8 +156,6 @@ pub enum DeviceType {
     Mouse,
 }
 
-pub struct GModelId(String);
-
 /// Driver for Logitech G devices
 pub trait GDeviceDriver: Send {
     fn get_model(&self) -> GDeviceModelRef;
