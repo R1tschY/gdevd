@@ -89,55 +89,55 @@ fn _main() -> Result<(), Box<dyn Error>> {
         Duration::from_millis(5000),
     );
 
-    Ok(match Cli::parse() {
+    match Cli::parse() {
         Cli::Color {
             color,
             sector: Some(sector),
         } => {
-            devices.method_call(
+            let _: () = devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "color_sector",
                 (&color as &str, sector),
-            )?
+            )?;
         }
         Cli::Color { color, sector: _ } => {
-            devices.method_call(
+            let _: () = devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "color_sectors",
                 (&color as &str,),
-            )?
+            )?;
         }
         Cli::Breathe {
             color,
             time_step,
             brightness,
         } => {
-            devices.method_call(
+            let _: () = devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "breathe",
                 (color, time_step, brightness),
-            )?
+            )?;
         }
         Cli::Cycle {
             time_step,
             brightness,
         } => {
-            devices.method_call(
+            let _: () = devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "cycle",
                 (time_step, brightness),
-            )?
+            )?;
         }
         Cli::Wave {
             direction,
             time_step,
             brightness,
         } => {
-            devices.method_call(
+            let _: () = devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "wave",
                 (&direction as &str, time_step, brightness),
-            )?
+            )?;
         }
         Cli::Refresh => {
             devices.method_call("de.richardliebscher.gdevd.GDeviceManager", "refresh", ())?
@@ -161,7 +161,9 @@ fn _main() -> Result<(), Box<dyn Error>> {
         }
         Cli::InstallService { prefix } => install_service(&prefix)?,
         Cli::UninstallService { prefix } => uninstall_service(&prefix)?,
-    })
+    };
+
+    Ok(())
 }
 
 static SERVICE_FILES: &[(&str, &str)] = &[
@@ -193,7 +195,7 @@ fn install_service(prefix: &Path) -> Result<(), io::Error> {
 
     let prefix_str = prefix
         .to_str()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "invalid prefix path"))?;
+        .ok_or_else(|| io::Error::other("invalid prefix path"))?;
 
     for (path, content) in SERVICE_FILES {
         install_file(path, content.replace("$$PREFIX$$", prefix_str).as_bytes())?;
@@ -244,8 +246,8 @@ fn uninstall_service(prefix: &Path) -> Result<(), io::Error> {
         run_command(Command::new("systemctl").arg("stop").arg("gdevd"))
     })?;
 
-    uninstall_file(&prefix.join("bin/gdevd"))?;
-    uninstall_file(&prefix.join("bin/gdevctl"))?;
+    uninstall_file(prefix.join("bin/gdevd"))?;
+    uninstall_file(prefix.join("bin/gdevctl"))?;
 
     for (path, _) in SERVICE_FILES {
         uninstall_file(path)?;
@@ -268,10 +270,7 @@ fn uninstall_file(path: impl AsRef<Path>) -> Result<(), io::Error> {
 fn run_command(cmd: &mut Command) -> io::Result<()> {
     let out = cmd.output()?;
     if !out.status.success() {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            String::from_utf8_lossy(&out.stderr),
-        ))
+        Err(io::Error::other(String::from_utf8_lossy(&out.stderr)))
     } else {
         Ok(())
     }
