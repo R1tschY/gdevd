@@ -89,7 +89,7 @@ fn _main() -> Result<(), Box<dyn Error>> {
         Duration::from_millis(5000),
     );
 
-    match Cli::parse() {
+    Ok(match Cli::parse() {
         Cli::Color {
             color,
             sector: Some(sector),
@@ -98,14 +98,14 @@ fn _main() -> Result<(), Box<dyn Error>> {
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "color_sector",
                 (&color as &str, sector),
-            )?;
+            )?
         }
         Cli::Color { color, sector: _ } => {
             devices.method_call(
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "color_sectors",
                 (&color as &str,),
-            )?;
+            )?
         }
         Cli::Breathe {
             color,
@@ -116,7 +116,7 @@ fn _main() -> Result<(), Box<dyn Error>> {
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "breathe",
                 (color, time_step, brightness),
-            )?;
+            )?
         }
         Cli::Cycle {
             time_step,
@@ -126,7 +126,7 @@ fn _main() -> Result<(), Box<dyn Error>> {
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "cycle",
                 (time_step, brightness),
-            )?;
+            )?
         }
         Cli::Wave {
             direction,
@@ -137,10 +137,10 @@ fn _main() -> Result<(), Box<dyn Error>> {
                 "de.richardliebscher.gdevd.GDeviceManager",
                 "wave",
                 (&direction as &str, time_step, brightness),
-            )?;
+            )?
         }
         Cli::Refresh => {
-            devices.method_call("de.richardliebscher.gdevd.GDeviceManager", "refresh", ())?;
+            devices.method_call("de.richardliebscher.gdevd.GDeviceManager", "refresh", ())?
         }
         Cli::ListDrivers => {
             let drivers: (Vec<(String,)>,) = devices.method_call(
@@ -161,9 +161,7 @@ fn _main() -> Result<(), Box<dyn Error>> {
         }
         Cli::InstallService { prefix } => install_service(&prefix)?,
         Cli::UninstallService { prefix } => uninstall_service(&prefix)?,
-    }
-
-    Ok(())
+    })
 }
 
 static SERVICE_FILES: &[(&str, &str)] = &[
